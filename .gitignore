@@ -1,0 +1,41 @@
+# Environment files (contain secrets)
+.env
+.env.*
+!.env.example.template
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# SSL certs (local only)
+*.pem
+cert.pem
+key.pem
+
+# Uploads (ephemeral on Render)
+static/uploads/
+
+# Model files (too large for git)
+models/saved/*.h5
+models/saved/*.pt
+models/saved/*.pkl
+
+# IDE
+.vscode/
+.idea/
+
+# Misc
+*.log
+*.txt.bak
+out.txt
+err.txt
+syntax_err.txt
+syntax_results.txt
+test_out*.txt
+verify.txt
