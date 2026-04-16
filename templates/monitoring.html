@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Live Monitoring — DeepGuard AI{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+      <h2 class="page-title mb-1"><i class="bi bi-broadcast me-2 text-warning"></i>
+        {% if target_user %}
+          Monitoring: {{ target_user.name }}
+        {% else %}
+          Live Monitoring — All Candidates
+        {% endif %}
+      </h2>
+      <p class="text-muted mb-0">Real-time AI deepfake detection results</p>
+    </div>
+    <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline-light">
+      <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+  </div>
+
+  {% if target_user and active_session %}
+  <!-- Single-user detail view -->
+  <div class="row g-4">
+    <div class="col-lg-4">
+      <div class="glass-card">
+        <h6 class="mb-3 text-accent"><i class="bi bi-person-badge me-2"></i>Candidate Info</h6>
+        <table class="table table-dark-custom table-sm">
+          <tr><td class="text-muted">Name</td><td class="fw-medium">{{ target_user.name }}</td></tr>
+          <tr><td class="text-muted">Email</td><td>{{ target_user.email }}</td></tr>
+          <tr><td class="text-muted">Session</td><td><code class="text-accent">{{ active_session.id[:12] }}…</code></td></tr>
+          <tr><td class="text-muted">Type</td><td>{{ active_session.exam_type | title }}</td></tr>
+          <tr><td class="text-muted">Started</td><td>{{ active_session.start_time[:16] }}</td></tr>
+          <tr><td class="text-muted">Status</td>
+            <td><span class="badge {{ 'bg-danger' if active_session.status == 'flagged' else 'bg-warning text-dark' }}">
+              {{ active_session.status | upper }}
+            </span></td>
+          </tr>
+        </table>
+        <div class="d-flex gap-2 mt-3">
+          <button class="btn btn-danger flex-fill btn-sm"
+                  onclick="flagUser('{{ target_user.id }}')">
+            <i class="bi bi-flag me-1"></i>Flag & Suspend
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <!-- Score timeline chart -->
+      <div class="glass-card mb-3">
+        <h6 class="mb-3 text-accent"><i class="bi bi-graph-up me-2"></i>Detection Timeline</h6>
+        <div style="height:220px">
+          <canvas id="timelineChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Latest results -->
+      <div class="glass-card">
+        <h6 class="mb-3 text-accent"><i class="bi bi-list-check me-2"></i>Recent Detection Events</h6>
+        <div class="table-responsive">
+          <table class="table table-dark-custom table-sm">
+            <thead><tr><th>Time</th><th>Video</th><th>Audio</th><th>Fusion</th><th>Verdict</th></tr></thead>
+            <tbody id="resultsTable">
+              {% for r in results %}
+              <tr>
+                <td class="text-muted small">{{ r.timestamp[11:19] }}</td>
+                <td><span class="score-badge {{ 'bad' if r.video_score > 0.5 else 'good' }}">{{ "%.2f"|format(r.video_score) }}</span></td>
+                <td><span class="score-badge {{ 'bad' if r.audio_score > 0.5 else 'good' }}">{{ "%.2f"|format(r.audio_score) }}</span></td>
+                <td><span class="score-badge {{ 'bad' if r.fusion_score > 0.5 else 'good' }}">{{ "%.2f"|format(r.fusion_score) }}</span></td>
+                <td>
+                  {% if r.is_deepfake %}
+                    <span class="badge bg-danger">DEEPFAKE</span>
+                  {% elif r.is_suspicious %}
+                    <span class="badge bg-warning text-dark">SUSPICIOUS</span>
+                  {% else %}
+                    <span class="badge bg-success">REAL</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% else %}
+  <!-- All-session grid -->
+  <div class="row g-3" id="monitorGrid">
+    {% for s in sessions %}
+    {% set u = s.users %}
+    <div class="col-md-6 col-xl-4">
+      <div class="glass-card candidate-card">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <div class="avatar-sm-circle">{{ (u.name or 'U')[0] | upper }}</div>
+          <div>
+            <div class="fw-semibold">{{ u.name }}</div>
+            <div class="text-muted small">{{ s.exam_type | title }}</div>
+          </div>
+          <span class="ms-auto badge bg-warning text-dark"><span class="live-dot me-1"></span>Live</span>
+        </div>
+        <div class="score-meters">
+          <div class="score-row">
+            <span class="score-lbl">Video</span>
+            <div class="score-bar-wrap"><div class="score-bar" id="mv_{{ s.user_id }}" style="width:0%"></div></div>
+            <span class="score-pct" id="mvs_{{ s.user_id }}">—</span>
+          </div>
+          <div class="score-row">
+            <span class="score-lbl">Audio</span>
+            <div class="score-bar-wrap"><div class="score-bar audio" id="ma_{{ s.user_id }}" style="width:0%"></div></div>
+            <span class="score-pct" id="mas_{{ s.user_id }}">—</span>
+          </div>
+        </div>
+        <a href="{{ url_for('admin.live_user', user_id=s.user_id) }}" class="btn btn-sm btn-outline-accent w-100 mt-3">
+          <i class="bi bi-eye me-1"></i>Detailed View
+        </a>
+      </div>
+    </div>
+    {% else %}
+    <div class="col-12 text-center py-5">
+      <i class="bi bi-camera-video-off display-3 text-muted d-block mb-3"></i>
+      <p class="text-muted">No active sessions to monitor.</p>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% if results %}
+<script>
+const timelineData = {{ results | tojson }};
+const ctx = document.getElementById('timelineChart').getContext('2d');
+const labels = timelineData.map(r => r.timestamp.slice(11,19)).reverse();
+const vidData = timelineData.map(r => r.video_score * 100).reverse();
+const audData = timelineData.map(r => r.audio_score * 100).reverse();
+const fusData = timelineData.map(r => r.fusion_score * 100).reverse();
+new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [
+      { label: 'Video', data: vidData, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', tension: 0.4, fill: true },
+      { label: 'Audio', data: audData, borderColor: '#22d3ee', backgroundColor: 'rgba(34,211,238,0.1)', tension: 0.4, fill: true },
+      { label: 'Fusion', data: fusData, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', tension: 0.4, fill: true },
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#ccc' } } },
+    scales: {
+      x: { ticks: { color: '#999' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+      y: { min: 0, max: 100, ticks: { color: '#999', callback: v => v + '%' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+    }
+  }
+});
+</script>
+{% endif %}
+{% endblock %}

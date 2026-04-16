@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}Session Results — DeepGuard AI{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+    <a href="{{ url_for('user.dashboard') }}" class="btn btn-outline-light btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+    <h2 class="page-title mb-0">Session Report</h2>
+    <span class="badge bg-{{ 'success' if session.status == 'completed' else ('danger' if session.status == 'flagged' else 'warning text-dark') }} ms-auto fs-6">
+      {{ session.status | upper }}
+    </span>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="stat-card glass-card text-center">
+        <div class="stat-icon text-accent"><i class="bi bi-clock"></i></div>
+        <div class="stat-value">{{ session.exam_type | title }}</div>
+        <div class="stat-label">Exam Type</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="stat-card glass-card text-center">
+        {% set avg_fusion = (results | map(attribute='fusion_score') | list | sum / (results|length)) if results else 0 %}
+        <div class="stat-icon {{ 'text-danger' if avg_fusion > 0.5 else 'text-success' }}">
+          <i class="bi bi-shield-{{ 'x' if avg_fusion > 0.5 else 'check' }}"></i>
+        </div>
+        <div class="stat-value {{ 'text-danger' if avg_fusion > 0.5 else 'text-success' }}">
+          {{ "%.0f"|format(avg_fusion * 100) }}%
+        </div>
+        <div class="stat-label">Avg Deepfake Score</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="stat-card glass-card text-center">
+        <div class="stat-icon text-info"><i class="bi bi-bar-chart"></i></div>
+        <div class="stat-value text-info">{{ results|length }}</div>
+        <div class="stat-label">AI Checks Performed</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="stat-card glass-card text-center">
+        {% if session.score is not none %}
+        <div class="stat-icon text-warning"><i class="bi bi-trophy"></i></div>
+        <div class="stat-value text-warning">{{ session.score }}/{{ session.total_questions }}</div>
+        <div class="stat-label">Exam Score</div>
+        {% else %}
+        <div class="stat-icon text-muted"><i class="bi bi-dash-circle"></i></div>
+        <div class="stat-value text-muted">N/A</div>
+        <div class="stat-label">Exam Score</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Detection timeline chart -->
+  {% if results %}
+  <div class="glass-card mb-4">
+    <h6 class="mb-3"><i class="bi bi-graph-up me-2 text-accent"></i>Deepfake Score Timeline</h6>
+    <div style="height:250px">
+      <canvas id="resultsChart"></canvas>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Detection events table -->
+  <div class="glass-card mb-4">
+    <h6 class="mb-3"><i class="bi bi-list-check me-2 text-accent"></i>Detection Events ({{ results|length }})</h6>
+    {% if results %}
+    <div class="table-responsive">
+      <table class="table table-dark-custom">
+        <thead>
+          <tr><th>#</th><th>Time</th><th>Video Score</th><th>Audio Score</th><th>Fusion Score</th><th>Similarity</th><th>Verdict</th></tr>
+        </thead>
+        <tbody>
+          {% for r in results %}
+          <tr>
+            <td class="text-muted">{{ loop.index }}</td>
+            <td class="text-muted small">{{ r.timestamp[11:19] }}</td>
+            <td><span class="score-badge {{ 'bad' if r.video_score > 0.5 else 'good' }}">{{ "%.3f"|format(r.video_score) }}</span></td>
+            <td><span class="score-badge {{ 'bad' if r.audio_score > 0.5 else 'good' }}">{{ "%.3f"|format(r.audio_score) }}</span></td>
+            <td><span class="score-badge {{ 'bad' if r.fusion_score > 0.5 else 'good' }}">{{ "%.3f"|format(r.fusion_score) }}</span></td>
+            <td><span class="score-badge {{ 'good' if r.similarity_score > 0.6 else 'warn' }}">{{ "%.2f"|format(r.similarity_score) }}</span></td>
+            <td>
+              {% if r.is_deepfake %}<span class="badge bg-danger">DEEPFAKE</span>
+              {% elif r.is_suspicious %}<span class="badge bg-warning text-dark">SUSPICIOUS</span>
+              {% else %}<span class="badge bg-success">REAL</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state text-center py-4">
+      <p class="text-muted">No detection data recorded for this session.</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Activity log -->
+  {% if activity %}
+  <div class="glass-card">
+    <h6 class="mb-3"><i class="bi bi-journal-text me-2 text-accent"></i>Activity Log</h6>
+    <div class="activity-timeline">
+      {% for log in activity %}
+      <div class="activity-item {{ 'activity-alert' if 'deepfake' in log.event_type or 'flag' in log.event_type else '' }}">
+        <div class="activity-dot"></div>
+        <div class="activity-content">
+          <span class="fw-semibold">{{ log.event_type | replace('_', ' ') | title }}</span>
+          <span class="text-muted ms-2 small">{{ log.timestamp[11:19] }}</span>
+          {% if log.details %}
+          <div class="text-muted small">{{ log.details }}</div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if results %}
+<script>
+const rd = {{ results | tojson }};
+const labels = rd.map(r => r.timestamp.slice(11,19)).reverse();
+new Chart(document.getElementById('resultsChart').getContext('2d'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [
+      { label: 'Video Score', data: rd.map(r => r.video_score * 100).reverse(), borderColor: '#6366f1', tension: 0.4, fill: false },
+      { label: 'Audio Score', data: rd.map(r => r.audio_score * 100).reverse(), borderColor: '#22d3ee', tension: 0.4, fill: false },
+      { label: 'Fusion Score', data: rd.map(r => r.fusion_score * 100).reverse(), borderColor: '#f59e0b', borderWidth: 3, tension: 0.4, fill: false },
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#ccc' } } },
+    scales: {
+      x: { ticks: { color: '#999' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+      y: { min: 0, max: 100, ticks: { color: '#999', callback: v => v + '%' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+    }
+  }
+});
+</script>
+{% endif %}
+{% endblock %}

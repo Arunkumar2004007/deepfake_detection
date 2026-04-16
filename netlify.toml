@@ -1,0 +1,13 @@
+[build]
+  publish = "."
+  command = "pip install -r requirements.txt"
+
+[dev]
+  command = "python app.py"
+  targetPort = 5000
+
+[[redirects]]
+  from = "/*"
+  to   = "https://your-render-or-railway-backend.com/:splat"
+  status = 200
+  force = true

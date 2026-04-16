@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}Activity Logs — DeepGuard Admin{% endblock %}
+{% block content %}
+<div class="container-fluid px-4 py-4">
+
+  <!-- Header -->
+  <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+    <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline-light btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+    <div>
+      <h2 class="page-title mb-0"><i class="bi bi-journal-text me-2 text-accent"></i>Activity Logs</h2>
+      <p class="text-muted small mb-0">All user actions and detection events across the platform.</p>
+    </div>
+    <span class="badge bg-secondary ms-auto fs-6">{{ logs|length }} entries</span>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="glass-card p-3 mb-4">
+    <div class="row g-2 align-items-center">
+      <div class="col-md-4">
+        <input type="text" id="searchInput" class="form-control form-control-sm bg-dark text-white border-secondary"
+               placeholder="Search user, event, details…" oninput="filterLogs()">
+      </div>
+      <div class="col-md-3">
+        <select class="form-select form-select-sm bg-dark text-white border-secondary" id="eventFilter" onchange="filterLogs()">
+          <option value="">All Events</option>
+          <option value="video_upload_detection">Video Upload Detection</option>
+          <option value="deepfake_alert">Deepfake Alert</option>
+          <option value="exam_submitted">Exam Submitted</option>
+          <option value="multi_person_detected">Multi-Person Detected</option>
+          <option value="identity_mismatch">Identity Mismatch</option>
+          <option value="admin_flag">Admin Flag</option>
+          <option value="tab_switch">Tab Switch</option>
+        </select>
+      </div>
+      <div class="col-md-5 text-end">
+        <span class="text-muted small">Showing <span id="visibleCount">{{ logs|length }}</span> of {{ logs|length }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logs table -->
+  <div class="glass-card">
+    <div class="table-responsive">
+      <table class="table table-dark-custom table-hover" id="logsTable">
+        <thead>
+          <tr>
+            <th style="width:160px">User</th>
+            <th style="width:160px">Event</th>
+            <th style="width:120px">Session / ID</th>
+            <th>Details</th>
+            <th style="width:100px">Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs %}
+          {% set is_upload = log.event_type == 'video_upload_detection' %}
+          {% set is_fake   = log.event_type in ['deepfake_alert', 'admin_flag'] %}
+          {% set is_warn   = log.event_type in ['multi_person_detected', 'identity_mismatch', 'tab_switch', 'blur'] %}
+          <tr class="{{ 'table-danger' if is_fake else ('table-warning' if is_warn else '') }}"
+              data-event="{{ log.event_type }}"
+              data-user="{{ (log.users.name if log.users else '') | lower }}"
+              data-details="{{ log.details | string | lower }}">
+            <td>
+              <div class="fw-medium">{{ log.users.name if log.users else '—' }}</div>
+              <div class="text-muted" style="font-size:.72rem">{{ log.users.email if log.users else '' }}</div>
+            </td>
+            <td>
+              {% if is_upload %}
+                <span class="badge bg-info text-dark">
+                  <i class="bi bi-film me-1"></i>Video Upload
+                </span>
+              {% elif is_fake %}
+                <span class="badge bg-danger">
+                  <i class="bi bi-exclamation-triangle me-1"></i>{{ log.event_type | replace('_',' ') | title }}
+                </span>
+              {% elif is_warn %}
+                <span class="badge bg-warning text-dark">
+                  <i class="bi bi-exclamation me-1"></i>{{ log.event_type | replace('_',' ') | title }}
+                </span>
+              {% else %}
+                <span class="badge bg-secondary">
+                  {{ log.event_type | replace('_',' ') | title }}
+                </span>
+              {% endif %}
+            </td>
+            <td>
+              <code class="text-accent small">
+                {{ log.session_id[:10] if log.session_id else '—' }}…
+              </code>
+            </td>
+            <td>
+              {% if is_upload and log.details %}
+                {% set d = log.details %}
+                <span class="fw-medium">{{ d.filename or '—' }}</span>
+                <span class="mx-1 text-muted">·</span>
+                <span class="{{ 'text-danger' if d.is_deepfake else 'text-success' }} fw-semibold">
+                  {{ d.label or '—' }}
+                </span>
+                {% if d.video_score is not none %}
+                  <span class="mx-1 text-muted">·</span>
+                  <span class="text-muted small">score {{ "%.3f"|format(d.video_score) }}</span>
+                {% endif %}
+                {% if d.confidence is not none %}
+                  <span class="mx-1 text-muted">·</span>
+                  <span class="text-muted small">conf {{ "%.0f"|format(d.confidence * 100) }}%</span>
+                {% endif %}
+              {% elif log.details %}
+                <span class="text-muted small">{{ log.details | string | truncate(80) }}</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td class="text-muted small">
+              {% if log.timestamp %}
+                <div>{{ log.timestamp[5:10] }}</div>
+                <div>{{ log.timestamp[11:19] }}</div>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="text-center text-muted py-5">
+              <i class="bi bi-journal-x display-4 d-block mb-3"></i>No activity logs yet.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterLogs() {
+  const q    = document.getElementById('searchInput').value.toLowerCase();
+  const evt  = document.getElementById('eventFilter').value.toLowerCase();
+  const rows = document.querySelectorAll('#logsTable tbody tr[data-event]');
+  let visible = 0;
+  rows.forEach(r => {
+    const matchQ   = !q   || r.dataset.user.includes(q) || r.dataset.details.includes(q) || r.dataset.event.includes(q);
+    const matchEvt = !evt || r.dataset.event === evt;
+    const show = matchQ && matchEvt;
+    r.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  document.getElementById('visibleCount').textContent = visible;
+}
+</script>
+{% endblock %}

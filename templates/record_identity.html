@@ -1,0 +1,339 @@
+{% extends "base.html" %}
+{% block title %}Identity Recording — DeepGuard AI{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── Recording page styles ─────────────────────────────────── */
+.rec-wrapper {
+  max-width: 740px;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+/* Camera Box */
+.camera-box {
+  position: relative;
+  background: #000;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 2px solid rgba(255,255,255,0.08);
+  aspect-ratio: 16/9;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 0 40px rgba(108,99,255,0.15);
+  transition: border-color 0.3s;
+}
+.camera-box.recording {
+  border-color: #ef4444;
+  box-shadow: 0 0 40px rgba(239,68,68,0.3), 0 0 80px rgba(239,68,68,0.15);
+  animation: recGlow 1.5s ease-in-out infinite alternate;
+}
+@keyframes recGlow {
+  0%   { box-shadow: 0 0 30px rgba(239,68,68,0.25); }
+  100% { box-shadow: 0 0 60px rgba(239,68,68,0.5); }
+}
+
+/* The actual video element — MUST fill the box */
+#livePreview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scaleX(-1); /* mirror = natural selfie view */
+  border-radius: 14px;
+  background: #000;
+  position: relative;
+  z-index: 1;   /* below the HUD overlays but above nothing */
+}
+
+/* Placeholder when camera not yet granted */
+.cam-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(9,9,15,0.97);
+  color: #64748b;
+  font-size: 0.9rem;
+  gap: 0.75rem;
+  border-radius: 14px;
+  z-index: 2;
+  transition: opacity 0.3s;
+}
+.cam-placeholder i { font-size: 3rem; color: #334155; }
+/* CRITICAL: use display:none not just opacity so it doesn't block the video */
+.cam-placeholder.hidden { display: none !important; }
+
+/* HUD overlays */
+.cam-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  border-radius: 14px;
+}
+/* Top left: LIVE / READY badge */
+.hud-badge {
+  position: absolute;
+  top: 14px; left: 14px;
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 12px;
+  border-radius: 50px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  backdrop-filter: blur(8px);
+}
+.hud-badge.live {
+  background: rgba(239,68,68,0.25);
+  border: 1px solid rgba(239,68,68,0.5);
+  color: #f87171;
+}
+.hud-badge.live .dot { animation: blink 0.9s infinite; }
+.hud-badge.ready {
+  background: rgba(34,197,94,0.15);
+  border: 1px solid rgba(34,197,94,0.4);
+  color: #4ade80;
+}
+.hud-badge .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: currentColor;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+/* Top right: timer */
+.hud-timer {
+  position: absolute;
+  top: 14px; right: 14px;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 4px 14px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #f1f5f9;
+  min-width: 70px;
+  text-align: center;
+  display: none;
+}
+
+/* Bottom: progress bar inside camera box */
+.hud-progress {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 5px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 0 0 14px 14px;
+  overflow: hidden;
+  display: none;
+}
+.hud-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #6c63ff, #ef4444);
+  transition: width 0.5s linear;
+}
+
+/* Corner guides (for face positioning) */
+.face-guide {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 160px; height: 200px;
+  border-radius: 50%;
+  border: 2px dashed rgba(108,99,255,0.35);
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(108,99,255,0.4);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  pointer-events: none;
+  transition: border-color 0.3s;
+}
+.face-guide.active { border-color: rgba(239,68,68,0.5); }
+
+/* Controls card */
+.ctrl-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 16px;
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+.status-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1rem;
+}
+.status-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.82rem; font-weight: 600;
+  padding: 4px 12px; border-radius: 50px;
+}
+.status-pill.idle    { background: rgba(100,116,139,0.15); color: #94a3b8; border: 1px solid rgba(100,116,139,0.3); }
+.status-pill.active  { background: rgba(239,68,68,0.15);   color: #f87171; border: 1px solid rgba(239,68,68,0.35); }
+.status-pill.done    { background: rgba(34,197,94,0.12);   color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
+.status-pill .s-dot  { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.status-pill.active .s-dot { animation: blink 0.9s infinite; }
+
+/* Progress bar (below camera) */
+.rec-track {
+  height: 6px; border-radius: 50px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden; margin-bottom: 0.5rem;
+}
+.rec-fill {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, #6c63ff, #ef4444);
+  border-radius: 50px;
+  transition: width 0.5s linear;
+}
+
+/* Buttons */
+.btn-record {
+  width: 100%; padding: 0.9rem; border-radius: 12px; border: none;
+  font-weight: 700; font-size: 1rem; cursor: pointer;
+  background: linear-gradient(135deg, #6c63ff, #4f46e5);
+  color: #fff; box-shadow: 0 0 25px rgba(108,99,255,0.45);
+  transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+}
+.btn-record:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 0 40px rgba(108,99,255,0.65); }
+.btn-record:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-record.danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  box-shadow: 0 0 25px rgba(239,68,68,0.45);
+}
+.btn-record.danger:hover { box-shadow: 0 0 40px rgba(239,68,68,0.65); }
+
+/* Tips */
+.tips-list li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: 0.875rem;
+  color: #94a3b8;
+}
+.tips-list li:last-child { border-bottom: none; }
+
+/* Upload overlay */
+.upload-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(9,9,15,0.92);
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(12px);
+}
+.upload-spinner {
+  width: 64px; height: 64px; border-radius: 50%;
+  border: 4px solid rgba(108,99,255,0.2);
+  border-top-color: #6c63ff;
+  animation: spin 0.9s linear infinite;
+  margin: 0 auto 1.5rem;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rec-wrapper">
+  <!-- Header -->
+  <div class="text-center mb-4">
+    <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,rgba(108,99,255,0.2),rgba(0,212,170,0.1));border:1px solid rgba(108,99,255,0.4);display:flex;align-items:center;justify-content:center;font-size:1.5rem;margin:0 auto 1rem;">
+      <i class="bi bi-camera-video-fill" style="color:#6c63ff"></i>
+    </div>
+    <h2 class="page-title mb-1">Identity Verification Recording</h2>
+    <p class="text-muted">Record 15 seconds of yourself speaking clearly. This creates your secure baseline identity for AI comparison during the exam.</p>
+  </div>
+
+  <!-- Camera Box -->
+  <div class="camera-box" id="cameraBox">
+    <!-- Live video feed -->
+    <video id="livePreview" autoplay muted playsinline
+           style="width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(-1);border-radius:14px;"
+    ></video>
+
+    <!-- HUD overlays (above video) -->
+    <div class="cam-hud">
+      <div class="hud-badge ready" id="hudBadge">
+        <span class="dot"></span>
+        <span id="hudBadgeText">STARTING…</span>
+      </div>
+      <div class="hud-timer" id="hudTimer">0:15</div>
+      <div class="face-guide" id="faceGuide">Position face here</div>
+      <div class="hud-progress" id="hudProgress">
+        <div class="hud-progress-bar" id="hudProgressBar"></div>
+      </div>
+    </div>
+
+    <!-- Placeholder — covers video until stream is active -->
+    <div class="cam-placeholder" id="camPlaceholder">
+      <i class="bi bi-camera-video" style="font-size:3rem;color:#6366f1;"></i>
+      <span style="color:#a5b4fc;font-weight:600;">Allow Camera &amp; Microphone</span>
+      <span class="text-muted small">Click "Allow" in the browser permission popup</span>
+      <button onclick="initCamera()"
+        style="margin-top:0.5rem;padding:0.45rem 1.2rem;border-radius:8px;
+               background:linear-gradient(135deg,#6366f1,#4f46e5);border:none;
+               color:#fff;font-size:0.85rem;font-weight:600;cursor:pointer;">
+        <i class="bi bi-camera-video-fill me-1"></i>Enable Camera
+      </button>
+    </div>
+  </div>
+
+  <!-- Controls Card -->
+  <div class="ctrl-card">
+    <!-- Status row -->
+    <div class="status-row">
+      <div class="status-pill idle" id="statusPill">
+        <span class="s-dot"></span>
+        <span id="statusText">Ready to record</span>
+      </div>
+      <div style="font-size:0.8rem;color:#64748b">
+        <i class="bi bi-clock me-1"></i>
+        <span id="progressPct">0%</span> — <span id="timerDisplay">0:00</span> / 0:15
+      </div>
+    </div>
+
+    <!-- Progress track -->
+    <div class="rec-track mb-3">
+      <div class="rec-fill" id="recProgress"></div>
+    </div>
+
+    <!-- Buttons -->
+    <button class="btn-record" id="startBtn" onclick="startRecording()">
+      <i class="bi bi-record-circle-fill"></i> Start Recording
+    </button>
+    <button class="btn-record danger d-none mt-2" id="stopBtn" onclick="stopRecording()">
+      <i class="bi bi-stop-circle-fill"></i> Stop Early
+    </button>
+  </div>
+
+  <!-- Instructions -->
+  <div class="glass-card">
+    <h6 class="mb-3"><i class="bi bi-lightbulb me-2 text-warning"></i>Recording Tips</h6>
+    <ul class="list-unstyled tips-list">
+      <li><i class="bi bi-check-circle-fill text-success me-2"></i>Ensure good lighting — your face must be clearly visible</li>
+      <li><i class="bi bi-check-circle-fill text-success me-2"></i>Speak naturally for all 15 seconds (say your name, read a sentence)</li>
+      <li><i class="bi bi-check-circle-fill text-success me-2"></i>Look <strong>directly at the camera</strong>, not the screen</li>
+      <li><i class="bi bi-check-circle-fill text-success me-2"></i>Position your face inside the oval guide on screen</li>
+      <li><i class="bi bi-check-circle-fill text-success me-2"></i>Avoid background noise — use a quiet room</li>
+      <li><i class="bi bi-x-circle-fill text-danger me-2"></i>Do not cover or hide your face</li>
+      <li><i class="bi bi-x-circle-fill text-danger me-2"></i>Do not use VTuber avatars, masks, or filters</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Upload processing overlay -->
+<div class="upload-overlay d-none" id="uploadOverlay">
+  <div class="text-center" id="uploadContent">
+    <div class="upload-spinner"></div>
+    <h5>Uploading & Processing…</h5>
+    <p class="text-muted small">Extracting audio and video streams for your AI baseline model</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/permissions.js') }}?v=2"></script>
+<script src="{{ url_for('static', filename='js/recorder.js') }}?v=4"></script>
+{% endblock %}

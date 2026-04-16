@@ -1,0 +1,3 @@
+models/heuristic_detector.py: OK
+models/video_model.py: OK
+routes/detection.py: OK

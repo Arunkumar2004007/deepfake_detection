@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — DeepGuard AI{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+  <!-- Welcome header -->
+  <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+    <div>
+      <h2 class="page-title mb-1">Welcome, {{ session.get('user_name', 'Candidate') }}! 👋</h2>
+      <p class="text-muted mb-0">Complete the steps below to start your secure exam session.</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('user.record_identity') }}" class="btn btn-outline-accent">
+        <i class="bi bi-camera-video me-2"></i>Re-Record Identity
+      </a>
+      <a href="{{ url_for('user.exam') }}" class="btn btn-primary-glow">
+        <i class="bi bi-pencil-square me-2"></i>Start Exam
+      </a>
+    </div>
+  </div>
+
+  <!-- Steps -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="step-card glass-card {{ 'step-done' if has_recording else '' }}">
+        <div class="step-num">1</div>
+        <div class="step-icon"><i class="bi bi-camera-video-fill"></i></div>
+        <h6 class="step-title">Identity Recording</h6>
+        <p class="step-desc text-muted small">Record 15 seconds of video+audio as your baseline identity.</p>
+        {% if has_recording %}
+          <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Completed</span>
+        {% else %}
+          <a href="{{ url_for('user.record_identity') }}" class="btn btn-sm btn-primary-glow mt-2">Start Recording</a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="step-card glass-card {{ 'step-done' if has_recording else 'step-locked' }}">
+        <div class="step-num">2</div>
+        <div class="step-icon"><i class="bi bi-mic-fill"></i></div>
+        <h6 class="step-title">Permissions Granted</h6>
+        <p class="step-desc text-muted small">Camera and microphone access verified for monitoring.</p>
+        {% if has_recording %}
+          <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Allowed</span>
+        {% else %}
+          <span class="badge bg-secondary">Pending</span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="step-card glass-card {{ '' if has_recording else 'step-locked' }}">
+        <div class="step-num">3</div>
+        <div class="step-icon"><i class="bi bi-pencil-square"></i></div>
+        <h6 class="step-title">Start Exam</h6>
+        <p class="step-desc text-muted small">Begin your proctored exam with live AI monitoring.</p>
+        {% if has_recording %}
+          <a href="{{ url_for('user.exam') }}" class="btn btn-sm btn-primary-glow mt-2">Enter Exam</a>
+        {% else %}
+          <span class="badge bg-secondary mt-2">Locked</span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="step-card glass-card {{ '' if has_recording else 'step-locked' }}"
+           style="border-color:rgba(99,102,241,0.35);">
+        <div class="step-num" style="background:linear-gradient(135deg,#6366f1,#a5b4fc);color:#fff;">4</div>
+        <div class="step-icon" style="color:#a5b4fc;"><i class="bi bi-camera-video"></i></div>
+        <h6 class="step-title">Live Interview</h6>
+        <p class="step-desc text-muted small">Real-time AI-monitored video interview with deepfake analysis.</p>
+        {% if has_recording %}
+          <a href="{{ url_for('user.interview') }}" class="btn btn-sm mt-2"
+             style="background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;">
+            <i class="bi bi-camera-video me-1"></i>Start Interview
+          </a>
+        {% else %}
+          <span class="badge bg-secondary mt-2">Locked</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Session history -->
+  <div class="glass-card">
+    <div class="card-header-custom d-flex align-items-center justify-content-between">
+      <h6 class="mb-0"><i class="bi bi-clock-history me-2 text-accent"></i>My Exam Sessions</h6>
+      <span class="badge bg-secondary">{{ sessions|length }} sessions</span>
+    </div>
+    {% if sessions %}
+    <div class="table-responsive">
+      <table class="table table-dark-custom">
+        <thead>
+          <tr>
+            <th>Session</th><th>Type</th><th>Started</th><th>Status</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in sessions %}
+          <tr>
+            <td><code class="text-accent">{{ s.id[:8] }}…</code></td>
+            <td><span class="badge bg-info-sm">{{ s.exam_type | title }}</span></td>
+            <td>{{ s.start_time[:16] if s.start_time else '—' }}</td>
+            <td>
+              {% if s.status == 'active' %}
+                <span class="status-dot active"><i class="bi bi-broadcast me-1"></i>Active</span>
+              {% elif s.status == 'completed' %}
+                <span class="status-dot completed"><i class="bi bi-check me-1"></i>Completed</span>
+              {% elif s.status == 'flagged' %}
+                <span class="status-dot flagged"><i class="bi bi-exclamation-triangle me-1"></i>Flagged</span>
+              {% else %}
+                <span class="status-dot"><i class="bi bi-dash me-1"></i>{{ s.status }}</span>
+              {% endif %}
+            </td>
+            <td>
+              <a href="{{ url_for('user.results', session_id=s.id) }}" class="btn btn-xs btn-outline-light">
+                <i class="bi bi-bar-chart-line"></i> Report
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-clipboard-x display-4 text-muted d-block mb-2"></i>
+      <p class="text-muted">No exam sessions yet. Complete your identity recording to get started.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

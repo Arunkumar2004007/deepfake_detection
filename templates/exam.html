@@ -1,0 +1,456 @@
+{% extends "base.html" %}
+{% block title %}Exam — DeepGuard AI{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── FULLSCREEN GATE ───────────────────────────────────────── */
+#fsGate {
+  position: fixed; inset: 0; z-index: 99999;
+  background: rgba(9,9,15,0.97);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; text-align: center;
+  backdrop-filter: blur(10px);
+  transition: opacity 0.4s;
+}
+#fsGate.hidden { opacity: 0; pointer-events: none; }
+.fs-gate-icon {
+  width: 90px; height: 90px; border-radius: 50%;
+  background: linear-gradient(135deg, rgba(108,99,255,0.2), rgba(0,212,170,0.1));
+  border: 2px solid rgba(108,99,255,0.5);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2.5rem; color: #6c63ff; margin-bottom: 1.5rem;
+  animation: pulseRing 2s ease-in-out infinite;
+}
+@keyframes pulseRing {
+  0%,100% { box-shadow: 0 0 0 0 rgba(108,99,255,0.4); }
+  50%      { box-shadow: 0 0 0 20px rgba(108,99,255,0); }
+}
+.fs-gate-title { font-size: 1.6rem; font-weight: 700; color: #f1f5f9; margin-bottom: 0.5rem; }
+.fs-gate-sub   { color: #64748b; font-size: 0.95rem; margin-bottom: 2rem; max-width: 400px; }
+#btnEnterFS {
+  padding: 0.85rem 2.5rem; border-radius: 12px; border: none; cursor: pointer;
+  background: linear-gradient(135deg, #6c63ff, #4f46e5);
+  color: #fff; font-weight: 700; font-size: 1rem;
+  box-shadow: 0 0 30px rgba(108,99,255,0.5); transition: all 0.2s;
+}
+#btnEnterFS:hover { transform: translateY(-2px); box-shadow: 0 0 50px rgba(108,99,255,0.7); }
+
+/* ── WARNING BANNERS ───────────────────────────────────────── */
+.warning-banner {
+  position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
+  z-index: 9999; min-width: 520px; max-width: 90vw;
+  border-radius: 12px; padding: 0.9rem 1.5rem;
+  display: flex; align-items: center; gap: 0.75rem;
+  animation: slideDown 0.4s ease;
+  opacity: 0; pointer-events: none; transition: opacity 0.3s;
+}
+.warning-banner.show { opacity: 1; pointer-events: auto; }
+@keyframes slideDown {
+  from { transform: translateX(-50%) translateY(-20px); opacity: 0; }
+  to   { transform: translateX(-50%) translateY(0);     opacity: 1; }
+}
+.warning-banner.danger  { background: rgba(239,68,68,0.15);  border: 1px solid rgba(239,68,68,0.5); }
+.warning-banner.warning { background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.5); }
+.warning-banner.gaze    { background: rgba(249,115,22,0.15); border: 1px solid rgba(249,115,22,0.6); }
+.wb-icon { font-size: 1.5rem; }
+.wb-text { flex: 1; }
+.wb-text strong { display: block; font-size: 0.95rem; }
+.wb-text small  { color: #94a3b8; font-size: 0.8rem; }
+.wb-close { background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; }
+
+/* ── EXAM LAYOUT (cam left | content right) ───────────────── */
+.exam-wrapper {
+  display: flex; height: calc(100vh - 56px); overflow: hidden;
+}
+.exam-cam-panel {
+  width: 280px; flex-shrink: 0;
+  background: rgba(255,255,255,0.02);
+  border-right: 1px solid rgba(255,255,255,0.06);
+  display: flex; flex-direction: column;
+  padding: 0.75rem;
+}
+.cam-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+.cam-preview-box { position: relative; border-radius: 12px; overflow: hidden; background: #000; flex-shrink: 0; }
+.exam-video  { width: 100%; display: block; border-radius: 12px; }
+.exam-canvas { position: absolute; inset: 0; opacity: 0; }
+
+/* AI overlay — admin-only (hidden for user, visible if role==admin via JS) */
+.ai-scores-overlay { display: none; } /* hidden by default; admin JS will show */
+
+.alert-panel { flex: 1; overflow-y: auto; margin-top: 0.5rem; font-size: 0.78rem; }
+
+/* ── CONTENT PANEL ─────────────────────────────────────────── */
+.exam-content-panel { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+.exam-topbar {
+  position: sticky; top: 0; z-index: 10;
+  background: rgba(9,9,15,0.95); backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding: 0.75rem 1.5rem;
+}
+.timer-val { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; color: #f1f5f9; }
+.fullscreen-btn {
+  width: 34px; height: 34px; border-radius: 8px; cursor: pointer;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+  display: flex; align-items: center; justify-content: center;
+  color: #94a3b8; transition: all 0.2s;
+}
+.fullscreen-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+/* ── QUESTION PALETTE + CONTENT ─────────────────────────────── */
+.exam-body { display: flex; flex: 1; min-height: 0; }
+
+/* Palette sidebar */
+.palette-sidebar {
+  width: 80px; flex-shrink: 0;
+  border-right: 1px solid rgba(255,255,255,0.06);
+  padding: 0.75rem 0.5rem;
+  overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: 0.4rem;
+}
+.palette-sidebar h6 { font-size: 0.65rem; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+.palette-btn {
+  width: 38px; height: 38px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04); color: #94a3b8;
+  font-size: 0.75rem; font-weight: 600; cursor: pointer;
+  transition: all 0.15s; display: flex; align-items: center; justify-content: center;
+}
+.palette-btn:hover   { background: rgba(108,99,255,0.15); border-color: rgba(108,99,255,0.4); color: #f1f5f9; }
+.palette-btn.current { background: rgba(108,99,255,0.3); border-color: #6c63ff; color: #fff; box-shadow: 0 0 12px rgba(108,99,255,0.4); }
+.palette-btn.answered{ background: rgba(34,197,94,0.2); border-color: rgba(34,197,94,0.5); color: #4ade80; }
+
+/* Single-question view */
+.question-stage {
+  flex: 1; padding: 2rem; overflow-y: auto;
+  display: flex; flex-direction: column;
+}
+.question-card {
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 16px; padding: 2rem; max-width: 760px; width: 100%; margin: 0 auto;
+  animation: fadeInQ 0.3s ease;
+}
+@keyframes fadeInQ {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.q-num { font-size: 0.7rem; font-weight: 700; color: #6c63ff; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.6rem; display: block; }
+.q-text { font-size: 1.05rem; color: #e2e8f0; line-height: 1.7; margin-bottom: 1.5rem; }
+.options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.option-item {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.85rem 1rem; border-radius: 10px; cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.03);
+  transition: all 0.15s;
+}
+.option-item:hover   { border-color: rgba(108,99,255,0.4); background: rgba(108,99,255,0.08); }
+.option-item.selected{ border-color: #6c63ff; background: rgba(108,99,255,0.18); }
+.option-letter {
+  width: 28px; height: 28px; border-radius: 6px; flex-shrink: 0;
+  background: rgba(255,255,255,0.06); color: #94a3b8;
+  font-size: 0.75rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.option-item.selected .option-letter { background: #6c63ff; color: #fff; }
+.option-text { font-size: 0.9rem; color: #cbd5e1; }
+
+/* Navigation buttons */
+.q-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; max-width: 760px; width: 100%; margin-left: auto; margin-right: auto; padding-bottom: 1.5rem; }
+.btn-nav {
+  padding: 0.65rem 1.5rem; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05); color: #e2e8f0; font-weight: 600;
+  cursor: pointer; font-size: 0.875rem; transition: all 0.2s;
+  display: flex; align-items: center; gap: 0.4rem;
+}
+.btn-nav:hover    { background: rgba(255,255,255,0.1); color: #fff; }
+.btn-nav:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-submit-final {
+  padding: 0.65rem 1.8rem; border-radius: 10px; border: none;
+  background: linear-gradient(135deg, #6c63ff, #4f46e5); color: #fff;
+  font-weight: 700; font-size: 0.875rem; cursor: pointer;
+  box-shadow: 0 0 20px rgba(108,99,255,0.4); transition: all 0.2s;
+}
+.btn-submit-final:hover { transform: translateY(-1px); box-shadow: 0 0 30px rgba(108,99,255,0.6); }
+.q-center-status { color: #64748b; font-size: 0.8rem; }
+
+/* live badge */
+.live-badge {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  font-size: 0.7rem; font-weight: 700; color: #ef4444; text-transform: uppercase;
+}
+.live-dot { width: 6px; height: 6px; border-radius: 50%; background: #ef4444; animation: blink 1s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+/* Anti-cheat modal */
+.border-danger { border-color: #ef4444 !important; }
+
+/* Strike counter */
+.strike-counter {
+  display: flex; gap: 6px; margin-top: 0.5rem;
+}
+.strike-dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid rgba(239,68,68,0.5); background: transparent;
+  transition: background 0.3s;
+}
+.strike-dot.active { background: #ef4444; border-color: #ef4444; box-shadow: 0 0 8px #ef4444; }
+
+/* Suspended screen */
+.suspended-screen {
+  position: fixed; inset: 0; z-index: 99998; background: rgba(9,9,15,0.98);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; display: none;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- ── FULLSCREEN GATE ─────────────────────────────────── -->
+<div id="fsGate">
+  <div class="fs-gate-icon"><i class="bi bi-fullscreen"></i></div>
+  <div class="fs-gate-title">Fullscreen Required</div>
+  <p class="fs-gate-sub">This exam must be taken in fullscreen mode. Click below to enter fullscreen and begin your exam.</p>
+  <button id="btnEnterFS" onclick="enterFullscreenAndStart()">
+    <i class="bi bi-arrows-fullscreen me-2"></i>Enter Fullscreen & Start
+  </button>
+  <p class="text-muted small mt-3"><i class="bi bi-shield-lock me-1"></i>Your session is being monitored by DeepGuard AI</p>
+</div>
+
+<!-- ── WARNING BANNERS ─────────────────────────────────── -->
+<div class="warning-banner danger" id="multiPersonBanner">
+  <i class="bi bi-people-fill text-danger wb-icon"></i>
+  <div class="wb-text">
+    <strong id="multiPersonMsg">⚠ Another person or mobile detected!</strong>
+    <small>Exam will be suspended after 3 violations. This has been reported.</small>
+  </div>
+  <div class="strike-counter ms-2" id="multiStrikeDots">
+    <div class="strike-dot" id="sd1"></div>
+    <div class="strike-dot" id="sd2"></div>
+    <div class="strike-dot" id="sd3"></div>
+  </div>
+  <button class="wb-close" onclick="hideBanner('multiPersonBanner')"><i class="bi bi-x-lg"></i></button>
+</div>
+
+<!-- ── GAZE / ATTENTION BANNER ──────────────────────────────── -->
+<div class="warning-banner gaze" id="gazeWarningBanner">
+  <i class="bi bi-eye-slash-fill wb-icon" style="color:#f97316"></i>
+  <div class="wb-text">
+    <strong id="gazeWarningMsg">⚠ Please look at the screen!</strong>
+    <small>Looking away from the screen is a violation. This has been logged.</small>
+  </div>
+  <button class="wb-close" onclick="hideBanner('gazeWarningBanner'); document.getElementById('gazeWarningBanner').dataset.persistent='false'">
+    <i class="bi bi-x-lg"></i>
+  </button>
+</div>
+
+<div class="warning-banner warning" id="identityBanner">
+  <i class="bi bi-person-x-fill text-warning wb-icon"></i>
+  <div class="wb-text">
+    <strong id="identityMsg">⚠ Identity mismatch detected!</strong>
+    <small>Please ensure you are the registered candidate. This has been logged.</small>
+  </div>
+  <button class="wb-close" onclick="hideBanner('identityBanner')"><i class="bi bi-x-lg"></i></button>
+</div>
+
+<!-- ── SUSPENDED SCREEN ────────────────────────────────── -->
+<div class="suspended-screen" id="suspendedScreen">
+  <i class="bi bi-shield-x" style="font-size:5rem;color:#ef4444;margin-bottom:1rem;display:block"></i>
+  <h2 style="color:#ef4444;font-weight:800">Exam Suspended</h2>
+  <p class="text-muted" style="max-width:420px;margin:1rem auto">
+    Your exam has been suspended due to repeated security violations.<br>
+    This incident has been reported to the administrator.
+  </p>
+  <p class="text-muted small">Please contact your exam proctor for further assistance.</p>
+</div>
+
+<!-- ── EXAM WRAPPER ────────────────────────────────────── -->
+<div class="exam-wrapper" id="examWrapper">
+
+  <!-- Left: Live Webcam Monitor -->
+  <div class="exam-cam-panel">
+    <div class="cam-header">
+      <span class="live-badge"><span class="live-dot"></span>LIVE</span>
+      <span class="text-muted" style="font-size:0.7rem">AI Monitoring</span>
+    </div>
+    <div class="cam-preview-box">
+      <video id="examVideo" autoplay muted playsinline class="exam-video"></video>
+      <canvas id="examCanvas" class="exam-canvas"></canvas>
+      <!-- AI scores: admin-only overlay (hidden via CSS, shown by JS when role==admin) -->
+      <div class="ai-scores-overlay" id="aiOverlay">
+        <div class="score-chip" id="videoChip">
+          <i class="bi bi-camera-video"></i>
+          <span id="videoScoreVal">—</span>
+        </div>
+        <div class="score-chip" id="audioChip">
+          <i class="bi bi-mic"></i>
+          <span id="audioScoreVal">—</span>
+        </div>
+        <div class="verdict-chip" id="verdictChip">
+          <span id="verdictText">Analyzing…</span>
+        </div>
+      </div>
+    </div>
+    <div class="alert-panel" id="alertPanel"></div>
+  </div>
+
+  <!-- Right: Content panel -->
+  <div class="exam-content-panel">
+    <!-- Topbar -->
+    <div class="exam-topbar d-flex align-items-center justify-content-between">
+      <div>
+        <h6 class="mb-0">Online Examination</h6>
+        <small class="text-muted">Session: {{ exam_session_id[:8] }}…</small>
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        <div>
+          <i class="bi bi-clock text-warning me-1"></i>
+          <span class="timer-val" id="examTimer">30:00</span>
+        </div>
+        <div>
+          <div class="strike-counter" id="topStrikeDots" title="Security Violations">
+            <div class="strike-dot" id="ts1"></div>
+            <div class="strike-dot" id="ts2"></div>
+            <div class="strike-dot" id="ts3"></div>
+          </div>
+        </div>
+        <div class="fullscreen-btn" onclick="enableFullscreen()" title="Fullscreen">
+          <i class="bi bi-fullscreen"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="px-3 pt-2 pb-1">
+      <div class="d-flex justify-content-between" style="font-size:0.75rem;color:#64748b;margin-bottom:4px">
+        <span>Progress</span>
+        <span id="progressLabel">0 / {{ questions|length }}</span>
+      </div>
+      <div class="progress" style="height:4px;background:rgba(255,255,255,0.05)">
+        <div class="progress-bar" id="questionProgress" style="width:0%;background:linear-gradient(90deg,#6c63ff,#00d4aa)"></div>
+      </div>
+    </div>
+
+    <!-- Body: palette + single-question stage -->
+    <div class="exam-body">
+      {% if questions %}
+      <!-- Question palette -->
+      <div class="palette-sidebar">
+        <h6>Q#</h6>
+        {% for q in questions %}
+        <button class="palette-btn {{ 'current' if loop.index == 1 else '' }}"
+                id="pb_{{ loop.index0 }}"
+                onclick="goToQuestion({{ loop.index0 }})">{{ loop.index }}</button>
+        {% endfor %}
+      </div>
+
+      <!-- Single-question stage -->
+      <div class="question-stage" id="questionStage">
+        {% for q in questions %}
+        <div class="question-card {{ '' if loop.index == 1 else 'd-none' }}"
+             id="qcard_{{ loop.index0 }}" data-qid="{{ q.id }}">
+          <span class="q-num">Question {{ loop.index }} of {{ questions|length }}</span>
+          <p class="q-text">{{ q.question_text }}</p>
+          <div class="options-grid">
+            {% for opt in q.options %}
+            <label class="option-item" data-qid="{{ q.id }}" data-answer="{{ opt }}">
+              <input type="radio" name="q_{{ q.id }}" value="{{ opt }}" class="d-none" />
+              <span class="option-letter">{{ ['A','B','C','D'][loop.index0] }}</span>
+              <span class="option-text">{{ opt }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+
+        <!-- Nav row -->
+        <div class="q-nav">
+          <button class="btn-nav" id="btnPrev" onclick="prevQuestion()" disabled>
+            <i class="bi bi-chevron-left"></i> Previous
+          </button>
+          <span class="q-center-status" id="qCenterStatus">Q1 of {{ questions|length }}</span>
+          <div class="d-flex gap-2">
+            <button class="btn-nav" id="btnNext" onclick="nextQuestion()">
+              Next <i class="bi bi-chevron-right"></i>
+            </button>
+            <button class="btn-submit-final" id="submitBtn" onclick="confirmSubmit()" style="display:none">
+              <i class="bi bi-send-check me-1"></i>Submit Exam
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {% elif is_interview %}
+      <div class="flex-fill d-flex align-items-center justify-content-center">
+        <div class="text-center">
+          <i class="bi bi-person-video2 display-2 text-muted mb-3 d-block"></i>
+          <h4>Interview Session Active</h4>
+          <p class="text-muted">Make eye contact with the camera and speak clearly.</p>
+          <span class="live-badge mt-3 d-inline-flex"><span class="live-dot"></span>INTERVIEW IN PROGRESS</span>
+        </div>
+      </div>
+      {% else %}
+      <div class="flex-fill d-flex align-items-center justify-content-center">
+        <p class="text-muted">No questions loaded for this exam.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Anti-cheat warning modal (fullscreen exit) -->
+<div class="modal fade" id="cheatModal" data-bs-backdrop="static" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content glass-card border-danger">
+      <div class="modal-body text-center py-4">
+        <i class="bi bi-exclamation-triangle-fill text-danger display-3 mb-3 d-block"></i>
+        <h5 class="text-danger">Security Warning!</h5>
+        <p id="cheatMsg" class="text-muted small"></p>
+        <p class="small text-muted">Auto-returning to fullscreen in <strong id="fsCountdown">10</strong>s</p>
+        <button class="btn btn-danger btn-sm" data-bs-dismiss="modal" onclick="enableFullscreen()">
+          Return to Exam Now
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Submit confirmation modal -->
+<div class="modal fade" id="submitModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content glass-card">
+      <div class="modal-body text-center py-4">
+        <i class="bi bi-send-check display-4 mb-3 d-block" style="color:#6c63ff"></i>
+        <h5>Submit Exam?</h5>
+        <p id="submitPreview" class="text-muted small"></p>
+        <div class="d-flex gap-2 justify-content-center mt-3">
+          <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Review Answers</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#6c63ff,#4f46e5);color:#fff;font-weight:700;border:none" onclick="submitExam()">
+            Yes, Submit
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const EXAM_SESSION_ID = "{{ exam_session_id }}";
+  const EXAM_DURATION   = 30 * 60;
+  const TOTAL_QUESTIONS = {{ questions|length }};
+  const USER_ROLE       = "{{ session.get('role', 'user') }}";
+  const USER_ID         = "{{ session.get('user_id', '') }}";
+  // Show AI overlay for admin only
+  if (USER_ROLE === 'admin') {
+    const overlay = document.getElementById('aiOverlay');
+    if (overlay) overlay.style.display = 'flex';
+  }
+</script>
+<!-- face-api.js (gaze detection — browser-only, no backend) -->
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.js"></script>
+<script src="{{ url_for('static', filename='js/permissions.js') }}"></script>
+<script src="{{ url_for('static', filename='js/exam_security.js') }}"></script>
+<script src="{{ url_for('static', filename='js/live_monitor.js') }}"></script>
+<script src="{{ url_for('static', filename='js/gaze_monitor.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DeepGuard AI — Secure AI-Powered Exam Proctoring</title>
+  <meta name="description" content="The most advanced AI deepfake detection and secure online exam proctoring platform. Identity verification, real-time monitoring, live threat detection." />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <style>
+    /* ── Landing-specific overrides ──────────────────────────── */
+    :root {
+      --accent: #6c63ff;
+      --accent2: #00d4aa;
+      --danger: #ef4444;
+      --bg-dark: #09090f;
+      --bg-card: rgba(255,255,255,0.04);
+      --border: rgba(255,255,255,0.08);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg-dark);
+      color: #f1f5f9;
+      font-family: 'Inter', sans-serif;
+      overflow-x: hidden;
+    }
+
+    /* ── NAV ───────────────────────────────────────────────── */
+    .lp-nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 999;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 2.5rem;
+      background: rgba(9,9,15,0.7);
+      backdrop-filter: blur(18px);
+      border-bottom: 1px solid var(--border);
+    }
+    .lp-logo { display: flex; align-items: center; gap: 0.6rem; text-decoration: none; }
+    .lp-logo-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; color: #fff;
+    }
+    .lp-logo-text { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 1.2rem; color: #fff; }
+    .lp-logo-text span { color: var(--accent2); }
+    .lp-nav-links { display: flex; align-items: center; gap: 0.75rem; }
+    .btn-nav-login {
+      padding: 0.45rem 1.2rem; border-radius: 8px;
+      border: 1px solid var(--border); background: transparent;
+      color: #f1f5f9; font-size: 0.875rem; text-decoration: none;
+      transition: all 0.2s;
+    }
+    .btn-nav-login:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .btn-nav-cta {
+      padding: 0.45rem 1.4rem; border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), #4f46e5);
+      color: #fff; font-size: 0.875rem; font-weight: 600;
+      text-decoration: none; border: none; transition: all 0.2s;
+      box-shadow: 0 0 20px rgba(108,99,255,0.4);
+    }
+    .btn-nav-cta:hover { transform: translateY(-1px); box-shadow: 0 0 30px rgba(108,99,255,0.6); color: #fff; }
+
+    /* ── HERO ───────────────────────────────────────────────── */
+    .hero {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      text-align: center;
+      position: relative;
+      padding: 8rem 1.5rem 4rem;
+    }
+    .hero-bg {
+      position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+    }
+    /* Radial glow */
+    .hero-glow {
+      position: absolute; top: 10%; left: 50%;
+      transform: translateX(-50%);
+      width: 900px; height: 600px;
+      background: radial-gradient(ellipse at center,
+        rgba(108,99,255,0.18) 0%,
+        rgba(0,212,170,0.07) 40%,
+        transparent 70%);
+      border-radius: 50%;
+      filter: blur(60px);
+      animation: pulseGlow 6s ease-in-out infinite alternate;
+    }
+    @keyframes pulseGlow {
+      0% { opacity: 0.6; transform: translateX(-50%) scale(1); }
+      100% { opacity: 1; transform: translateX(-50%) scale(1.1); }
+    }
+    /* Grid overlay */
+    .hero-grid {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(108,99,255,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(108,99,255,0.06) 1px, transparent 1px);
+      background-size: 50px 50px;
+    }
+    /* Floating particles */
+    .particle-field { position: absolute; inset: 0; }
+    .pt {
+      position: absolute; border-radius: 50%;
+      background: var(--accent); opacity: 0.6;
+      animation: floatPt var(--dur, 8s) ease-in-out infinite alternate;
+    }
+    @keyframes floatPt {
+      0% { transform: translate(0, 0) scale(1); opacity: 0.4; }
+      100% { transform: translate(var(--mx, 20px), var(--my, -30px)) scale(1.3); opacity: 0.8; }
+    }
+
+    .hero-content { position: relative; z-index: 1; max-width: 860px; margin: 0 auto; }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.35rem 1rem; border-radius: 50px;
+      background: rgba(108,99,255,0.15); border: 1px solid rgba(108,99,255,0.4);
+      font-size: 0.8rem; font-weight: 600; color: var(--accent);
+      margin-bottom: 1.5rem; letter-spacing: 0.05em; text-transform: uppercase;
+    }
+    .hero-badge .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--accent2); animation: blink 1.5s infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    .hero-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: clamp(2.5rem, 7vw, 4.5rem);
+      font-weight: 800; line-height: 1.1;
+      background: linear-gradient(135deg, #fff 30%, var(--accent) 70%, var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; margin-bottom: 1.25rem;
+    }
+    .hero-sub {
+      font-size: 1.15rem; color: #94a3b8; max-width: 600px;
+      margin: 0 auto 2.5rem; line-height: 1.7;
+    }
+    .hero-cta { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; }
+    .btn-hero-primary {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.85rem 2rem; border-radius: 12px; font-weight: 700;
+      font-size: 1rem; text-decoration: none;
+      background: linear-gradient(135deg, var(--accent), #4f46e5);
+      color: #fff; border: none;
+      box-shadow: 0 0 30px rgba(108,99,255,0.5);
+      transition: all 0.25s;
+    }
+    .btn-hero-primary:hover { transform: translateY(-2px); box-shadow: 0 0 50px rgba(108,99,255,0.7); color: #fff; }
+    .btn-hero-secondary {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.85rem 2rem; border-radius: 12px; font-weight: 600;
+      font-size: 1rem; text-decoration: none;
+      background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+      color: #e2e8f0; transition: all 0.25s;
+    }
+    .btn-hero-secondary:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+    /* Trust strip */
+    .trust-strip {
+      display: flex; justify-content: center; align-items: center;
+      gap: 2rem; margin-top: 3rem; flex-wrap: wrap;
+    }
+    .trust-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: #64748b; }
+    .trust-item i { color: var(--accent2); }
+
+    /* ── STATS ─────────────────────────────────────────────── */
+    .stats-section {
+      padding: 5rem 1.5rem;
+      background: linear-gradient(180deg, transparent, rgba(108,99,255,0.04), transparent);
+    }
+    .stat-card {
+      text-align: center; padding: 2rem 1rem;
+      border: 1px solid var(--border); border-radius: 16px;
+      background: var(--bg-card);
+      backdrop-filter: blur(10px);
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .stat-card:hover { transform: translateY(-4px); border-color: rgba(108,99,255,0.4); }
+    .stat-num {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 3rem; font-weight: 800; color: var(--accent); line-height: 1;
+    }
+    .stat-label { font-size: 0.85rem; color: #94a3b8; margin-top: 0.5rem; }
+
+    /* ── FEATURES ──────────────────────────────────────────── */
+    .features-section { padding: 6rem 1.5rem; }
+    .section-label {
+      text-align: center; font-size: 0.8rem; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--accent2); font-weight: 600; margin-bottom: 0.75rem;
+    }
+    .section-title {
+      text-align: center; font-family: 'Space Grotesk', sans-serif;
+      font-size: clamp(1.8rem, 4vw, 2.8rem); font-weight: 700;
+      color: #f1f5f9; margin-bottom: 0.75rem;
+    }
+    .section-sub { text-align: center; color: #64748b; font-size: 1rem; margin-bottom: 3.5rem; }
+
+    .feature-card {
+      padding: 2rem; border-radius: 16px;
+      border: 1px solid var(--border); background: var(--bg-card);
+      height: 100%; transition: all 0.3s;
+      position: relative; overflow: hidden;
+    }
+    .feature-card::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(108,99,255,0.06), transparent);
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .feature-card:hover { border-color: rgba(108,99,255,0.4); transform: translateY(-4px); }
+    .feature-card:hover::before { opacity: 1; }
+    .feature-icon {
+      width: 52px; height: 52px; border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem; margin-bottom: 1.25rem;
+    }
+    .icon-purple { background: rgba(108,99,255,0.15); color: var(--accent); }
+    .icon-teal   { background: rgba(0,212,170,0.12);  color: var(--accent2); }
+    .icon-red    { background: rgba(239,68,68,0.12);  color: #f87171; }
+    .icon-blue   { background: rgba(59,130,246,0.12); color: #60a5fa; }
+    .icon-amber  { background: rgba(245,158,11,0.12); color: #fbbf24; }
+    .icon-pink   { background: rgba(236,72,153,0.12); color: #f472b6; }
+
+    .feature-title { font-weight: 700; font-size: 1.05rem; color: #f1f5f9; margin-bottom: 0.6rem; }
+    .feature-desc  { font-size: 0.875rem; color: #64748b; line-height: 1.6; }
+    .feature-tag {
+      display: inline-block; font-size: 0.7rem; font-weight: 600;
+      padding: 0.2rem 0.6rem; border-radius: 50px; margin-top: 1rem;
+    }
+    .tag-new    { background: rgba(108,99,255,0.2); color: var(--accent); }
+    .tag-ai     { background: rgba(0,212,170,0.15); color: var(--accent2); }
+    .tag-secure { background: rgba(239,68,68,0.15); color: #f87171; }
+
+    /* ── HOW IT WORKS ──────────────────────────────────────── */
+    .how-section { padding: 6rem 1.5rem; background: rgba(108,99,255,0.03); }
+    .step-row { display: flex; align-items: flex-start; gap: 1.5rem; margin-bottom: 2.5rem; }
+    .step-num-circle {
+      width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--accent), #4f46e5);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 1.1rem; color: #fff;
+      box-shadow: 0 0 20px rgba(108,99,255,0.4);
+    }
+    .step-body h5 { color: #f1f5f9; font-weight: 700; margin-bottom: 0.3rem; }
+    .step-body p  { color: #64748b; font-size: 0.9rem; line-height: 1.6; margin: 0; }
+
+    /* ── SECURITY BANNER ───────────────────────────────────── */
+    .security-section { padding: 5rem 1.5rem; }
+    .security-card {
+      border-radius: 20px;
+      background: linear-gradient(135deg, rgba(108,99,255,0.1), rgba(0,212,170,0.05));
+      border: 1px solid rgba(108,99,255,0.3);
+      padding: 3rem 2.5rem;
+      position: relative; overflow: hidden;
+    }
+    .security-card::after {
+      content: ''; position: absolute; top: -100px; right: -100px;
+      width: 400px; height: 400px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(108,99,255,0.15), transparent 70%);
+      pointer-events: none;
+    }
+    .security-pill {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.3rem 1rem; border-radius: 50px;
+      background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3);
+      font-size: 0.75rem; font-weight: 600; color: #f87171; margin-bottom: 1rem;
+    }
+    .security-list { list-style: none; padding: 0; margin: 1.25rem 0 0; }
+    .security-list li {
+      display: flex; align-items: center; gap: 0.6rem;
+      padding: 0.5rem 0; border-bottom: 1px solid var(--border);
+      color: #cbd5e1; font-size: 0.9rem;
+    }
+    .security-list li:last-child { border-bottom: none; }
+    .security-list li i { color: var(--accent2); font-size: 1rem; }
+
+    /* ── CTA FOOTER ────────────────────────────────────────── */
+    .cta-section {
+      padding: 7rem 1.5rem; text-align: center;
+      background: radial-gradient(ellipse at center, rgba(108,99,255,0.1) 0%, transparent 70%);
+    }
+    .cta-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 800; color: #f1f5f9;
+      margin-bottom: 1rem;
+    }
+    .cta-sub { color: #94a3b8; font-size: 1rem; margin-bottom: 2.5rem; }
+
+    /* ── FOOTER ────────────────────────────────────────────── */
+    footer {
+      text-align: center; padding: 2rem;
+      border-top: 1px solid var(--border); color: #475569; font-size: 0.8rem;
+    }
+    footer span { color: var(--accent2); }
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <nav class="lp-nav">
+    <a href="/" class="lp-logo">
+      <div class="lp-logo-icon"><i class="bi bi-shield-check"></i></div>
+      <span class="lp-logo-text">DeepGuard<span>AI</span></span>
+    </a>
+    <div class="lp-nav-links">
+      <a href="{{ url_for('auth.login') }}" class="btn-nav-login">Sign In</a>
+      <a href="{{ url_for('auth.register') }}" class="btn-nav-cta">Get Started Free</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-bg">
+      <div class="hero-glow"></div>
+      <div class="hero-grid"></div>
+      <div class="particle-field">
+        <div class="pt" style="width:6px;height:6px;top:20%;left:10%;--dur:9s;--mx:30px;--my:-40px;background:#6c63ff"></div>
+        <div class="pt" style="width:4px;height:4px;top:40%;left:80%;--dur:11s;--mx:-20px;--my:30px;background:#00d4aa"></div>
+        <div class="pt" style="width:8px;height:8px;top:70%;left:20%;--dur:7s;--mx:40px;--my:-20px;background:#6c63ff;opacity:0.4"></div>
+        <div class="pt" style="width:5px;height:5px;top:15%;left:65%;--dur:13s;--mx:-30px;--my:50px;background:#00d4aa"></div>
+        <div class="pt" style="width:3px;height:3px;top:60%;left:90%;--dur:8s;--mx:20px;--my:-30px;background:#6c63ff"></div>
+        <div class="pt" style="width:7px;height:7px;top:80%;left:50%;--dur:10s;--mx:-40px;--my:-20px;background:#00d4aa;opacity:0.5"></div>
+      </div>
+    </div>
+
+    <div class="hero-content">
+      <div class="hero-badge">
+        <span class="dot"></span>
+        AI-Powered Exam Proctoring
+      </div>
+      <h1 class="hero-title">
+        Secure Exams with<br>Real-Time AI Detection
+      </h1>
+      <p class="hero-sub">
+        DeepGuard AI uses advanced deepfake detection, identity verification, and multi-person monitoring to ensure every exam is taken by the right person — fairly, securely, and without compromise.
+      </p>
+      <div class="hero-cta">
+        <a href="{{ url_for('auth.register') }}" class="btn-hero-primary">
+          <i class="bi bi-shield-lock"></i> Start Secure Exam
+        </a>
+        <a href="{{ url_for('auth.login') }}" class="btn-hero-secondary">
+          <i class="bi bi-box-arrow-in-right"></i> Sign In
+        </a>
+      </div>
+      <div class="trust-strip">
+        <div class="trust-item"><i class="bi bi-check-circle-fill"></i> No credit card required</div>
+        <div class="trust-item"><i class="bi bi-shield-fill-check"></i> HTTPS encrypted</div>
+        <div class="trust-item"><i class="bi bi-camera-video-fill"></i> AI identity verified</div>
+        <div class="trust-item"><i class="bi bi-lock-fill"></i> Session fingerprinted</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATS -->
+  <section class="stats-section">
+    <div class="container">
+      <div class="row g-3 justify-content-center">
+        <div class="col-6 col-md-3">
+          <div class="stat-card">
+            <div class="stat-num">97%</div>
+            <div class="stat-label">Deepfake Detection<br>Accuracy</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="stat-card">
+            <div class="stat-num" style="color:var(--accent2)">3s</div>
+            <div class="stat-label">Frame Analysis<br>Interval</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="stat-card">
+            <div class="stat-num" style="color:#f87171">3×</div>
+            <div class="stat-label">Strike System<br>Anti-Cheat</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="stat-card">
+            <div class="stat-num" style="color:#fbbf24">100%</div>
+            <div class="stat-label">Real-Time<br>Monitoring</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="features-section">
+    <div class="container">
+      <div class="section-label">Platform Features</div>
+      <h2 class="section-title">Everything You Need for Secure Proctoring</h2>
+      <p class="section-sub">Built for institutions, enterprises, and anyone who needs honest, verifiable assessments.</p>
+
+      <div class="row g-3">
+        <div class="col-md-6 col-lg-4">
+          <div class="feature-card">
+            <div class="feature-icon icon-purple"><i class="bi bi-person-badge-fill"></i></div>
+            <div class="feature-title">Identity Verification</div>
+            <div class="feature-desc">Candidates record a 15-second baseline video before the exam. Live face embeddings are compared every 30 seconds to detect impersonation.</div>
+            <span class="feature-tag tag-ai">AI Powered</span>
+          </div>
+        </div>
+        <div class="col-md-6 col-lg-4">
+          <div class="feature-card">
+            <div class="feature-icon icon-red"><i class="bi bi-people-fill"></i></div>
+            <div class="feature-title">Multi-Person Detection</div>
+            <div class="feature-desc">Real-time face counting using OpenCV. If another person or mobile device is detected, a 3-strike warning system activates — 3rd strike suspends the exam.</div>
+            <span class="feature-tag tag-secure">Anti-Cheat</span>
+          </div>
+        </div>
+        <div class="col-md-6 col-lg-4">
+          <div class="feature-card">
+            <div class="feature-icon icon-teal"><i class="bi bi-shield-fill-exclamation"></i></div>
+            <div class="feature-title">Deepfake Detection</div>
+            <div class="feature-desc">CNN + LSTM models analyze video and audio streams for deepfake manipulation. Rolling-window ensemble scoring reduces false positives.</div>
+            <span class="feature-tag tag-ai">AI Powered</span>
+          </div>
+        </div>
+        <div class="col-md-6 col-lg-4">
+          <div class="feature-card">
+            <div class="feature-icon icon-blue"><i class="bi bi-fullscreen"></i></div>
+            <div class="feature-title">Fullscreen Enforcement</div>
+            <div class="feature-desc">Exam content is hidden until fullscreen mode is entered. Exiting fullscreen triggers automatic re-entry, warning modals, and activity logging.</div>
+            <span class="feature-tag tag-secure">Anti-Cheat</span>
+          </div>
+        </div>
+        <div class="col-md-6 col-lg-4">
+          <div class="feature-card">
+            <div class="feature-icon icon-amber"><i class="bi bi-clipboard2-check-fill"></i></div>
+            <div class="feature-title">iMocha-Style UX</div>
+            <div class="feature-desc">Single-question-at-a-time exam flow with a question palette sidebar, color-coded progress, keyboard navigation, and timed auto-submit.</div>
+            <span class="feature-tag tag-new">New</span>
+          </div>
+        </div>
+        <div class="col-md-6 col-lg-4">
+          <div class="feature-card">
+            <div class="feature-icon icon-pink"><i class="bi bi-graph-up-arrow"></i></div>
+            <div class="feature-title">Admin Live Dashboard</div>
+            <div class="feature-desc">Admins see all active candidates in real time via WebSocket streaming. Review detection scores, flag candidates, and view full activity logs.</div>
+            <span class="feature-tag tag-new">Real-Time</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="how-section">
+    <div class="container">
+      <div class="row align-items-center g-5">
+        <div class="col-lg-5">
+          <div class="section-label">How It Works</div>
+          <h2 class="section-title text-start">From Login to Secure Completion</h2>
+          <p class="section-sub text-start">A seamless 4-step process that keeps exams honest from start to finish.</p>
+        </div>
+        <div class="col-lg-7">
+          <div class="step-row">
+            <div class="step-num-circle">1</div>
+            <div class="step-body">
+              <h5>Register & Identity Recording</h5>
+              <p>Create your account and record a 15-second video+audio baseline. This is your identity fingerprint for the session.</p>
+            </div>
+          </div>
+          <div class="step-row">
+            <div class="step-num-circle">2</div>
+            <div class="step-body">
+              <h5>Grant Camera & Mic Permissions</h5>
+              <p>Allow browser access to your camera and microphone. DeepGuard AI needs these to monitor your session in real time.</p>
+            </div>
+          </div>
+          <div class="step-row">
+            <div class="step-num-circle">3</div>
+            <div class="step-body">
+              <h5>Enter Fullscreen & Begin Exam</h5>
+              <p>Questions appear one at a time. AI continuously verifies your identity, checks for extra persons, and monitors for deepfakes.</p>
+            </div>
+          </div>
+          <div class="step-row" style="margin-bottom:0">
+            <div class="step-num-circle">4</div>
+            <div class="step-body">
+              <h5>Submit & View Results</h5>
+              <p>Submit when ready (or auto-submit on timer end). Your results and session report are available on the dashboard.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECURITY BANNER -->
+  <section class="security-section">
+    <div class="container">
+      <div class="security-card">
+        <div class="row align-items-center g-4">
+          <div class="col-lg-6">
+            <div class="security-pill"><i class="bi bi-shield-fill-check"></i> Enterprise Security</div>
+            <h3 style="font-family:'Space Grotesk',sans-serif;font-weight:700;color:#f1f5f9;margin-bottom:0.75rem">
+              Multi-Layer Protection,<br>Zero Compromise
+            </h3>
+            <p style="color:#94a3b8;font-size:0.95rem;line-height:1.7">
+              Every exam session is protected by rate-limited authentication, session fingerprinting, CSP headers, and encrypted HTTPS transport — so you can trust the results.
+            </p>
+          </div>
+          <div class="col-lg-6">
+            <ul class="security-list">
+              <li><i class="bi bi-check-circle-fill"></i> Rate-limited login (10 attempts/min brute-force protection)</li>
+              <li><i class="bi bi-check-circle-fill"></i> Session fingerprinting (IP + browser binding)</li>
+              <li><i class="bi bi-check-circle-fill"></i> HTTPS/TLS encrypted with auto-generated SSL</li>
+              <li><i class="bi bi-check-circle-fill"></i> Content-Security-Policy + X-Frame-Options headers</li>
+              <li><i class="bi bi-check-circle-fill"></i> 3-strike anti-cheat with exam suspension</li>
+              <li><i class="bi bi-check-circle-fill"></i> All violations logged and reported to admin</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta-section">
+    <div class="container">
+      <h2 class="cta-title">Ready to Run Honest Exams?</h2>
+      <p class="cta-sub">Join DeepGuard AI today — setup takes under 2 minutes.</p>
+      <div class="d-flex justify-content-center gap-3 flex-wrap">
+        <a href="{{ url_for('auth.register') }}" class="btn-hero-primary" style="font-size:1.05rem;padding:0.9rem 2.5rem">
+          <i class="bi bi-shield-lock"></i> Create Free Account
+        </a>
+        <a href="{{ url_for('auth.login') }}" class="btn-hero-secondary" style="padding:0.9rem 2rem">
+          <i class="bi bi-box-arrow-in-right"></i> Sign In
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>&copy; 2026 <span>DeepGuard AI</span> — AI-Powered Secure Proctoring System</p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

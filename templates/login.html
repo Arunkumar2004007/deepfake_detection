@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Login — DeepGuard AI{% endblock %}
+
+{% block content %}
+<div class="auth-page">
+  <!-- Animated background -->
+  <div class="auth-bg">
+    <div class="particle" style="--i:1"></div>
+    <div class="particle" style="--i:2"></div>
+    <div class="particle" style="--i:3"></div>
+    <div class="particle" style="--i:4"></div>
+    <div class="particle" style="--i:5"></div>
+    <div class="grid-overlay"></div>
+  </div>
+
+  <div class="auth-container">
+    <!-- Logo -->
+    <div class="auth-logo text-center mb-4">
+      <div class="logo-circle mb-3">
+        <i class="bi bi-shield-check"></i>
+      </div>
+      <h1 class="brand-title">DeepGuard<span class="text-accent">AI</span></h1>
+      <p class="brand-subtitle">AI-Powered Deepfake Detection System</p>
+    </div>
+
+    <!-- Card -->
+    <div class="auth-card glass-card">
+      <!-- Tabs -->
+      <ul class="nav auth-tabs mb-4" id="authTabs" role="tablist">
+        <li class="nav-item flex-fill" role="presentation">
+          <button class="nav-link w-100 {{ '' if show_register else 'active' }}" id="login-tab"
+                  data-bs-toggle="tab" data-bs-target="#loginTab" type="button">
+            <i class="bi bi-box-arrow-in-right me-1"></i>Sign In
+          </button>
+        </li>
+        <li class="nav-item flex-fill" role="presentation">
+          <button class="nav-link w-100 {{ 'active' if show_register else '' }}" id="register-tab"
+                  data-bs-toggle="tab" data-bs-target="#registerTab" type="button">
+            <i class="bi bi-person-plus me-1"></i>Register
+          </button>
+        </li>
+      </ul>
+
+      <div class="tab-content">
+        <!-- LOGIN TAB -->
+        <div class="tab-pane fade {{ 'show active' if not show_register else '' }}" id="loginTab">
+          <form method="POST" action="{{ url_for('auth.login') }}" autocomplete="on" id="loginForm">
+            <div class="mb-3">
+              <label class="form-label text-muted small">Email Address</label>
+              <div class="input-group-custom">
+                <i class="bi bi-envelope input-icon"></i>
+                <input type="email" name="email" id="loginEmail" class="form-control custom-input"
+                       placeholder="you@example.com" required autocomplete="email" />
+              </div>
+            </div>
+            <div class="mb-4">
+              <label class="form-label text-muted small">Password</label>
+              <div class="input-group-custom">
+                <i class="bi bi-lock input-icon"></i>
+                <input type="password" name="password" id="loginPassword" class="form-control custom-input"
+                       placeholder="••••••••" required autocomplete="current-password" />
+                <i class="bi bi-eye toggle-pw" onclick="togglePw('loginPassword', this)"></i>
+              </div>
+              <div class="text-end mt-1">
+                <a href="{{ url_for('auth.forgot_password') }}" class="small"
+                   style="color:#a5b4fc;text-decoration:none;">
+                  <i class="bi bi-question-circle me-1"></i>Forgot Password?
+                </a>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary-glow w-100 mb-3" id="loginBtn">
+              <span class="btn-text"><i class="bi bi-shield-lock me-2"></i>Sign In</span>
+              <span class="btn-loader d-none"><span class="spinner-border spinner-border-sm me-2"></span>Verifying...</span>
+            </button>
+          </form>
+
+          {% if google_enabled %}
+          <div class="divider-text">or continue with</div>
+          <a href="{{ url_for('auth.google_login') }}" class="btn btn-google w-100">
+            <svg width="18" height="18" viewBox="0 0 48 48" class="me-2">
+              <path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 7.9 3l5.7-5.7C34.5 6.4 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.9z"/>
+              <path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 16 19 13 24 13c3.1 0 5.8 1.1 7.9 3l5.7-5.7C34.5 6.4 29.6 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
+              <path fill="#4CAF50" d="M24 44c5.2 0 9.9-1.9 13.5-5L31.8 33C29.9 34.3 27.1 35 24 35c-5.2 0-9.6-3.3-11.2-7.9l-6.5 5C9.5 40 16.2 44 24 44z"/>
+              <path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4-4.1 5.3l6.5 5.1C41.1 35.5 44 30.1 44 24c0-1.3-.1-2.7-.4-3.9z"/>
+            </svg>
+            Sign in with Google
+          </a>
+          {% endif %}
+        </div>
+
+        <!-- REGISTER TAB -->
+        <div class="tab-pane fade {{ 'show active' if show_register else '' }}" id="registerTab">
+          <form method="POST" action="{{ url_for('auth.register') }}" id="registerForm">
+            <div class="mb-3">
+              <label class="form-label text-muted small">Full Name</label>
+              <div class="input-group-custom">
+                <i class="bi bi-person input-icon"></i>
+                <input type="text" name="name" class="form-control custom-input"
+                       placeholder="John Doe" required />
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-muted small">Email Address</label>
+              <div class="input-group-custom">
+                <i class="bi bi-envelope input-icon"></i>
+                <input type="email" name="email" class="form-control custom-input"
+                       placeholder="you@example.com" required />
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-muted small">Password</label>
+              <div class="input-group-custom">
+                <i class="bi bi-lock input-icon"></i>
+                <input type="password" name="password" id="regPassword" class="form-control custom-input"
+                       placeholder="Min 6 characters" required />
+                <i class="bi bi-eye toggle-pw" onclick="togglePw('regPassword', this)"></i>
+              </div>
+            </div>
+            <div class="mb-4">
+              <label class="form-label text-muted small">Confirm Password</label>
+              <div class="input-group-custom">
+                <i class="bi bi-lock-fill input-icon"></i>
+                <input type="password" name="confirm_password" id="regConfirm" class="form-control custom-input"
+                       placeholder="Repeat password" required />
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary-glow w-100">
+              <i class="bi bi-person-check me-2"></i>Create Account
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <p class="text-center text-muted small mt-3">
+      Protected by DeepGuard AI ·  Multi-modal deepfake detection
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function togglePw(id, icon) {
+  const input = document.getElementById(id);
+  if (input.type === 'password') {
+    input.type = 'text';
+    icon.classList.replace('bi-eye', 'bi-eye-slash');
+  } else {
+    input.type = 'password';
+    icon.classList.replace('bi-eye-slash', 'bi-eye');
+  }
+}
+
+document.getElementById('loginForm').addEventListener('submit', function() {
+  const btn = document.getElementById('loginBtn');
+  btn.querySelector('.btn-text').classList.add('d-none');
+  btn.querySelector('.btn-loader').classList.remove('d-none');
+  btn.disabled = true;
+});
+</script>
+{% endblock %}
+`

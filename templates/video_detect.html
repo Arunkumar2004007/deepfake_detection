@@ -1,0 +1,795 @@
+{% extends "base.html" %}
+{% block title %}Video Deepfake Detection — DeepGuard AI{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ═══ UPLOAD ZONE ═══════════════════════════════════════════════════════════ */
+.upload-zone {
+  border: 2px dashed rgba(99,102,241,.5);
+  border-radius: 16px; padding: 3rem 2rem;
+  text-align: center; cursor: pointer;
+  transition: all .3s; background: rgba(99,102,241,.04); position: relative;
+}
+.upload-zone:hover, .upload-zone.dragover {
+  border-color: var(--accent,#6366f1);
+  background: rgba(99,102,241,.12); transform: translateY(-2px);
+}
+.upload-zone input[type="file"] {
+  position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%;
+}
+.file-info     { display:none; margin-top:1rem; }
+.progress-wrap { display:none; margin-top:1.5rem; }
+.progress-bar-custom {
+  height:8px; border-radius:4px;
+  background:linear-gradient(90deg,#6366f1,#8b5cf6); transition:width .3s;
+}
+.result-card   { display:none; }
+
+/* ═══ VERDICT BANNERS ════════════════════════════════════════════════════════ */
+.verdict-real { background:linear-gradient(135deg,#10b981,#059669); }
+.verdict-fake { background:linear-gradient(135deg,#ef4444,#dc2626); }
+.verdict-icon { font-size:4rem; }
+
+/* ═══ GAUGE ══════════════════════════════════════════════════════════════════ */
+.score-gauge {
+  width:140px; height:140px; margin:0 auto;
+  position:relative; display:flex; align-items:center; justify-content:center;
+}
+.score-gauge svg { position:absolute; inset:0; }
+.score-gauge .gauge-text { font-size:1.6rem; font-weight:700; z-index:1; }
+
+/* ═══ SIGNAL BARS ════════════════════════════════════════════════════════════ */
+.signal-row   { margin-bottom:1rem; }
+.signal-label { font-size:.8rem; color:rgba(255,255,255,.7);
+                display:flex; justify-content:space-between; margin-bottom:.35rem; }
+.signal-bg    { background:rgba(255,255,255,.07); border-radius:6px; height:8px; position:relative; }
+.signal-fill  { height:8px; border-radius:6px; transition:width .9s cubic-bezier(.4,0,.2,1); }
+
+/* Threshold tick line on bar */
+.signal-bg::after {
+  content:''; position:absolute; top:-3px; bottom:-3px;
+  width:2px; background:rgba(255,255,255,.25); border-radius:1px;
+  left:52%;   /* threshold 0.52 */
+}
+
+/* ═══ LIVENESS BADGES ════════════════════════════════════════════════════════ */
+.liveness-badge {
+  display:inline-flex; align-items:center; gap:.4rem;
+  padding:.35rem .85rem; border-radius:20px; font-size:.82rem; font-weight:600; border:1px solid;
+}
+.badge-live { background:rgba(16,185,129,.15); color:#34d399; border-color:rgba(16,185,129,.4); }
+.badge-ai   { background:rgba(239,68,68,.15);  color:#f87171; border-color:rgba(239,68,68,.4); }
+.badge-warn { background:rgba(245,158,11,.15); color:#fbbf24; border-color:rgba(245,158,11,.4); }
+
+/* ═══ REAL vs FAKE COMPARISON TABLE ═════════════════════════════════════════ */
+.diff-table { width:100%; border-collapse:separate; border-spacing:0; border-radius:12px; overflow:hidden; }
+.diff-table th {
+  padding:.75rem 1rem; font-size:.8rem; text-transform:uppercase; letter-spacing:.05em;
+}
+.diff-table td {
+  padding:.6rem 1rem; font-size:.82rem; border-top:1px solid rgba(255,255,255,.06);
+  vertical-align:middle;
+}
+.diff-table tr:hover td { background:rgba(255,255,255,.03); }
+.diff-th-signal { background:rgba(255,255,255,.05); color:rgba(255,255,255,.5); width:32%; }
+.diff-th-real   { background:rgba(16,185,129,.12);  color:#34d399; width:34%; text-align:center; }
+.diff-th-fake   { background:rgba(239,68,68,.12);   color:#f87171; width:34%; text-align:center; }
+.diff-td-signal { color:rgba(255,255,255,.75); font-weight:500; }
+.diff-td-real   { background:rgba(16,185,129,.06);  color:#a7f3d0; text-align:center; }
+.diff-td-fake   { background:rgba(239,68,68,.06);   color:#fca5a5; text-align:center; }
+.diff-val-real  { color:#34d399; font-weight:700; font-size:.9rem; }
+.diff-val-fake  { color:#f87171; font-weight:700; font-size:.9rem; }
+.diff-status    { font-size:1.1rem; }
+
+/* ═══ SPARKLINE ══════════════════════════════════════════════════════════════ */
+.sparkline-wrap {
+  display:flex; gap:3px; align-items:flex-end; min-height:60px;
+  padding:.6rem .8rem; background:rgba(0,0,0,.25); border-radius:10px;
+}
+
+/* ═══ WHY-BOX ════════════════════════════════════════════════════════════════ */
+.why-box {
+  border-radius:12px; padding:1.2rem 1.5rem;
+  border:1px solid;
+}
+.why-box-real { background:rgba(16,185,129,.08); border-color:rgba(16,185,129,.25); }
+.why-box-fake { background:rgba(239,68,68,.08);   border-color:rgba(239,68,68,.25); }
+.why-item { display:flex; align-items:flex-start; gap:.75rem; margin-top:.8rem; }
+.why-icon { font-size:1.3rem; flex-shrink:0; margin-top:.05rem; }
+.why-text { font-size:.83rem; color:rgba(255,255,255,.8); line-height:1.5; }
+.why-text strong { color:rgba(255,255,255,.95); }
+
+/* Spin */
+.spin { animation:spin 1s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+.sample-badge {
+  display:inline-block; padding:.2rem .65rem; border-radius:4px;
+  background:rgba(99,102,241,.2); color:var(--accent,#8b5cf6);
+  font-size:.75rem; font-weight:600;
+}
+.info-label { font-size:.7rem; color:rgba(255,255,255,.4); margin-top:.15rem; }
+.section-title {
+  display:flex; align-items:center; gap:.6rem;
+  font-size:.88rem; font-weight:600; color:rgba(255,255,255,.75);
+  margin-bottom:.85rem;
+}
+.section-title i { color:#6366f1; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-5" style="max-width:860px">
+
+  <!-- Page Header -->
+  <div class="text-center mb-5">
+    <div style="font-size:3.5rem;line-height:1;margin-bottom:1rem">
+      <i class="bi bi-film" style="color:#6366f1"></i>
+    </div>
+    <h1 class="page-title mb-2">Video Deepfake Detection</h1>
+    <p class="text-muted">
+      Our AI analyses <strong>12 signals</strong> — heartbeat (rPPG), GAN fingerprint, eye blinks,
+      GLCM skin texture, facial symmetry and more — to tell if a video is a <strong>real living person</strong>
+      or <strong>AI-generated / deepfaked</strong>.
+    </p>
+    <span class="sample-badge">MP4 · AVI · MOV · MKV · WebM · FLV · WMV</span>
+  </div>
+
+  <!-- ─── How It Detects Real vs Fake (always visible) ─── -->
+  <div class="glass-card p-4 mb-4">
+    <div class="section-title"><i class="bi bi-info-circle"></i> How We Tell Real vs AI-Generated</div>
+    <div class="table-responsive">
+      <table class="diff-table">
+        <thead>
+          <tr>
+            <th class="diff-th-signal">Signal</th>
+            <th class="diff-th-real"><i class="bi bi-person-check me-1"></i> Real Human Video</th>
+            <th class="diff-th-fake"><i class="bi bi-robot me-1"></i> AI / Deepfake Video</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="diff-td-signal">❤️ rPPG Heartbeat</td>
+            <td class="diff-td-real">Green-channel pulses at 0.75–4 Hz<br><small>SNR ≥ 3 = clear heartbeat (REAL)</small></td>
+            <td class="diff-td-fake">No periodic signal — frames random<br><small>SNR &lt; 1.5 = no heartbeat (AI)</small></td>
+          </tr>
+          <tr>
+            <td class="diff-td-signal">📡 GAN Fingerprint</td>
+            <td class="diff-td-real">No spectral power spikes<br><small>Real cameras don't GAN-upscale</small></td>
+            <td class="diff-td-fake">Power spikes at N/2 &amp; N/4 bins<br><small>GAN/diffusion upsampling artefact</small></td>
+          </tr>
+          <tr>
+            <td class="diff-td-signal">🧬 GLCM Texture</td>
+            <td class="diff-td-real">High entropy, low energy<br><small>Rich skin detail (complex GLCM)</small></td>
+            <td class="diff-td-fake">Low entropy, high energy<br><small>Too smooth / uniform skin</small></td>
+          </tr>
+          <tr>
+            <td class="diff-td-signal">🪞 Facial Symmetry</td>
+            <td class="diff-td-real">Natural asymmetry (NCC 0.82–0.92)<br><small>Real humans aren't perfectly symmetric</small></td>
+            <td class="diff-td-fake">Too symmetric (NCC &gt; 0.94)<br><small>AI trained on aligned face data</small></td>
+          </tr>
+          <tr>
+            <td class="diff-td-signal">👁 Eye Blink</td>
+            <td class="diff-td-real">Blinks every 3–5 s<br><small>EAR dips below 0.20</small></td>
+            <td class="diff-td-fake">Eyes stay open &amp; fixed<br><small>EAR stays flat or 0</small></td>
+          </tr>
+          <tr>
+            <td class="diff-td-signal">🔲 Blending Boundary</td>
+            <td class="diff-td-real">Smooth face-to-background<br><small>Gradual Laplacian change</small></td>
+            <td class="diff-td-fake">Abrupt sharpness at face edge<br><small>Face-swap blending mask artefact</small></td>
+          </tr>
+          <tr>
+            <td class="diff-td-signal">📊 FFT Frequency</td>
+            <td class="diff-td-real">Rich high-freq detail<br><small>LF-ratio 0.40–0.65</small></td>
+            <td class="diff-td-fake">Over-smooth AI generation<br><small>LF-ratio &gt; 0.65</small></td>
+          </tr>
+        </tbody>
+
+      </table>
+    </div>
+  </div>
+
+  <!-- ─── Upload Card ─── -->
+  <div class="glass-card p-4 mb-4">
+    <div class="upload-zone" id="uploadZone">
+      <input type="file" id="videoFile" accept="video/*" />
+      <i class="bi bi-cloud-arrow-up display-4 text-accent mb-3 d-block"></i>
+      <h5 class="fw-semibold mb-1">Drag &amp; drop your video here</h5>
+      <p class="text-muted mb-0 small">or click to browse — max 500 MB</p>
+    </div>
+
+    <div class="file-info glass-card p-3 d-flex align-items-center gap-3" id="fileInfo">
+      <i class="bi bi-file-earmark-play fs-3 text-accent"></i>
+      <div class="flex-fill">
+        <div class="fw-semibold" id="fileName">—</div>
+        <div class="text-muted small"  id="fileSize">—</div>
+      </div>
+      <button class="btn btn-sm btn-outline-light" id="clearBtn"><i class="bi bi-x"></i></button>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="d-flex justify-content-between mb-1 small text-muted">
+        <span id="progressLabel">Uploading…</span>
+        <span id="progressPct">0%</span>
+      </div>
+      <div class="bg-dark rounded" style="height:8px">
+        <div class="progress-bar-custom" id="progressBar" style="width:0%"></div>
+      </div>
+    </div>
+
+    <div class="mt-4 text-center">
+      <button class="btn btn-primary-glow px-5 py-2" id="analyseBtn" disabled>
+        <i class="bi bi-cpu me-2"></i>Analyse Video
+      </button>
+    </div>
+  </div>
+
+  <!-- ─── Result Card ─── -->
+  <div class="glass-card result-card" id="resultCard">
+    <div class="card-header-custom d-flex align-items-center gap-2">
+      <i class="bi bi-bar-chart-line text-accent"></i>
+      <h6 class="mb-0">Analysis Result</h6>
+      <span class="ms-auto small text-muted" id="analysedAt"></span>
+    </div>
+    <div class="p-4">
+
+      <!-- Verdict Banner -->
+      <div class="rounded-3 p-4 text-white text-center mb-4" id="verdictBanner">
+        <div class="verdict-icon mb-2" id="verdictIcon"></div>
+        <h2 class="fw-bold mb-1" id="verdictText"></h2>
+        <p class="mb-3 opacity-75" id="verdictSub"></p>
+        <div id="livenessBadges" class="d-flex gap-2 justify-content-center flex-wrap"></div>
+      </div>
+
+      <!-- Score row -->
+      <div class="row g-3 text-center mb-4">
+        <div class="col-4">
+          <div class="glass-card p-3 h-100">
+            <div class="score-gauge mb-2">
+              <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="10"/>
+                <circle cx="50" cy="50" r="42" fill="none" stroke="url(#gaugeGrad)" stroke-width="10"
+                        stroke-linecap="round" stroke-dasharray="264" stroke-dashoffset="264"
+                        transform="rotate(-90 50 50)" id="gaugeCircle" style="transition:stroke-dashoffset .8s"/>
+                <defs>
+                  <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#10b981"/>
+                    <stop offset="52%" stop-color="#f59e0b"/>
+                    <stop offset="100%" stop-color="#ef4444"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+              <span class="gauge-text" id="gaugeText">—</span>
+            </div>
+            <div class="small text-muted">AI Fake Score</div>
+            <div class="info-label">0% Real · 100% Fake</div>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="glass-card p-3 h-100 d-flex flex-column align-items-center justify-content-center">
+            <div class="fs-2 fw-bold text-warning mb-1" id="confidenceText">—</div>
+            <div class="small text-muted">Confidence</div>
+            <div class="info-label">Certainty of verdict</div>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="glass-card p-3 h-100 d-flex flex-column align-items-center justify-content-center">
+            <div class="fs-4 fw-semibold mb-1" id="labelText">—</div>
+            <div class="small text-muted">Verdict</div>
+            <div class="info-label" id="labelSub">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── REAL vs FAKE dynamic comparison ── -->
+      <div id="diffSection" style="display:none" class="mb-4">
+        <div class="section-title"><i class="bi bi-arrow-left-right"></i> Your Video — Real vs Fake Signal Comparison</div>
+        <div class="table-responsive">
+          <table class="diff-table">
+            <thead>
+              <tr>
+                <th class="diff-th-signal">Signal</th>
+                <th class="diff-th-real">✅ What REAL Looks Like</th>
+                <th class="diff-th-fake">⚠ What FAKE Looks Like</th>
+                <th style="background:rgba(255,255,255,.05);color:rgba(255,255,255,.5);text-align:center;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;padding:.75rem 1rem">
+                  Your Video
+                </th>
+              </tr>
+            </thead>
+            <tbody id="diffRows"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── Why This Is Real / Fake ── -->
+      <div id="whySection" style="display:none" class="mb-4">
+        <div class="section-title"><i class="bi bi-lightbulb"></i> Why Is This Classified As <span id="whyLabel"></span>?</div>
+        <div id="whyBox" class="why-box"></div>
+      </div>
+
+      <!-- ── 8-Signal Bars ── -->
+      <div id="signalSection" style="display:none" class="mb-4">
+        <div class="section-title">
+          <i class="bi bi-activity"></i> All 8 Detection Signals
+          <span class="badge bg-secondary ms-auto" style="font-size:.7rem">threshold 0.52</span>
+        </div>
+        <div class="small text-muted mb-2">
+          <span style="color:#10b981">●</span> Low = Real &nbsp;
+          <span style="color:#f59e0b">●</span> Borderline &nbsp;
+          <span style="color:#ef4444">●</span> High = Fake &nbsp;
+          <span style="opacity:.4">│ = threshold</span>
+        </div>
+        <div id="signalRows"></div>
+      </div>
+
+      <!-- ── Frame Sparkline ── -->
+      <div id="sparklineSection" style="display:none" class="mb-4">
+        <div class="section-title"><i class="bi bi-film"></i> Frame-by-Frame AI Score <span class="ms-auto small fw-normal text-muted" id="sparklineStats"></span></div>
+        <div class="sparkline-wrap" id="frameSparkline"></div>
+        <div class="d-flex justify-content-between small mt-1" style="color:rgba(255,255,255,.3)">
+          <span>▶ First frame</span>
+          <span>Last frame ▶</span>
+        </div>
+      </div>
+
+      <div class="mt-4 d-flex justify-content-center gap-3 flex-wrap">
+        <button class="btn btn-outline-light" id="resetBtn">
+          <i class="bi bi-arrow-counterclockwise me-2"></i>Analyse Another Video
+        </button>
+        <a href="{{ url_for('user.dashboard') }}" class="btn btn-outline-accent">
+          <i class="bi bi-house me-2"></i>Dashboard
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Info cards -->
+  <div class="row g-3 mt-2">
+    <div class="col-md-4">
+      <div class="glass-card p-3 text-center">
+        <i class="bi bi-eye fs-3 text-accent mb-2 d-block"></i>
+        <div class="fw-semibold small">Eye Blink Liveness</div>
+        <div class="text-muted" style="font-size:.78rem">MediaPipe 468-point mesh detects natural eye movement & blinks</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="glass-card p-3 text-center">
+        <i class="bi bi-shield-check fs-3 text-warning mb-2 d-block"></i>
+        <div class="fw-semibold small">8-Signal Fusion</div>
+        <div class="text-muted" style="font-size:.78rem">Skin texture, landmark stability, FFT, chroma & more fused</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="glass-card p-3 text-center">
+        <i class="bi bi-journal-check fs-3 text-success mb-2 d-block"></i>
+        <div class="fw-semibold small">Admin Logged</div>
+        <div class="text-muted" style="font-size:.78rem">All detections are logged and visible to administrators</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ─── DOM refs ─────────────────────────────────────────────────────────────── */
+const uploadZone   = document.getElementById('uploadZone');
+const fileInput    = document.getElementById('videoFile');
+const fileInfo     = document.getElementById('fileInfo');
+const fileName     = document.getElementById('fileName');
+const fileSize     = document.getElementById('fileSize');
+const clearBtn     = document.getElementById('clearBtn');
+const analyseBtn   = document.getElementById('analyseBtn');
+const progressWrap = document.getElementById('progressWrap');
+const progressBar  = document.getElementById('progressBar');
+const progressPct  = document.getElementById('progressPct');
+const progressLbl  = document.getElementById('progressLabel');
+const resultCard   = document.getElementById('resultCard');
+const resetBtn     = document.getElementById('resetBtn');
+let selectedFile   = null;
+let fakeTimer      = null;
+
+/* ─── Utilities ─────────────────────────────────────────────────────────────  */
+function fmt(b) {
+  if (b < 1024)       return b + ' B';
+  if (b < 1048576)    return (b/1024).toFixed(1) + ' KB';
+  if (b < 1073741824) return (b/1048576).toFixed(1) + ' MB';
+  return (b/1073741824).toFixed(2) + ' GB';
+}
+function clamp(v,lo,hi){ return Math.min(Math.max(v,lo),hi); }
+function pctStr(v){ return Math.round(clamp(v,0,1)*100) + '%'; }
+
+function showFile(file) {
+  selectedFile = file;
+  fileName.textContent = file.name;
+  fileSize.textContent = fmt(file.size);
+  fileInfo.style.display = 'flex';
+  analyseBtn.disabled = false;
+}
+function resetUI() {
+  clearTimeout(fakeTimer);
+  selectedFile = null; fileInput.value = '';
+  fileInfo.style.display = 'none';
+  progressWrap.style.display = 'none';
+  progressBar.style.width = '0%';
+  progressPct.textContent = '0%';
+  resultCard.style.display = 'none';
+  analyseBtn.innerHTML = '<i class="bi bi-cpu me-2"></i>Analyse Video';
+  analyseBtn.disabled = true;
+}
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) showFile(fileInput.files[0]); });
+uploadZone.addEventListener('dragover',  e  => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) showFile(e.dataTransfer.files[0]);
+});
+clearBtn.addEventListener('click', resetUI);
+resetBtn.addEventListener('click', resetUI);
+
+function animateProgress(fromPct, toPct, ms, label) {
+  clearInterval(fakeTimer);
+  progressLbl.textContent = label;
+  const step = (toPct - fromPct) / (ms / 200);
+  let current = fromPct;
+  fakeTimer = setInterval(() => {
+    current = Math.min(current + step, toPct);
+    progressBar.style.width = current + '%';
+    progressPct.textContent = Math.round(current) + '%';
+    if (current >= toPct) clearInterval(fakeTimer);
+  }, 200);
+}
+
+/* ─── Analyse ───────────────────────────────────────────────────────────────  */
+analyseBtn.addEventListener('click', () => {
+  if (!selectedFile) return;
+  analyseBtn.disabled = true;
+  analyseBtn.innerHTML = '<i class="bi bi-cpu me-2 spin"></i>Analysing…';
+  progressWrap.style.display = 'block';
+  resultCard.style.display   = 'none';
+  progressBar.style.width    = '0%';
+
+  const fd  = new FormData();
+  fd.append('video', selectedFile);
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/detect/upload');
+  xhr.timeout = 5 * 60 * 1000;
+
+  xhr.upload.onprogress = e => {
+    if (e.lengthComputable) {
+      clearInterval(fakeTimer);
+      const p = Math.round(e.loaded / e.total * 40);
+      progressBar.style.width = p + '%'; progressPct.textContent = p + '%';
+      progressLbl.textContent = `Uploading… ${fmt(e.loaded)} / ${fmt(e.total)}`;
+    }
+  };
+  xhr.upload.onloadend = () => {
+    const steps = [
+      { to:55,  ms:2500, label:'⚙ Extracting video frames…'              },
+      { to:67,  ms:2000, label:'👁 Eye blink & liveness analysis…'       },
+      { to:78,  ms:2000, label:'🧬 Skin texture & landmark check…'       },
+      { to:89,  ms:1500, label:'📡 FFT spectrum & chroma analysis…'      },
+      { to:95,  ms:1000, label:'📊 Fusing 8 signals — building report…'  },
+    ];
+    let d = 0;
+    steps.forEach(s => {
+      setTimeout(() => animateProgress(parseFloat(progressBar.style.width)||40, s.to, s.ms, s.label), d);
+      d += s.ms;
+    });
+  };
+  xhr.onload = () => {
+    clearInterval(fakeTimer);
+    progressBar.style.width = '100%'; progressPct.textContent = '100%';
+    progressLbl.textContent = '✅ Done!';
+    analyseBtn.innerHTML = '<i class="bi bi-cpu me-2"></i>Analyse Video';
+    analyseBtn.disabled  = false;
+    if (xhr.status === 200) {
+      try { showResult(JSON.parse(xhr.responseText)); }
+      catch(e) { showError('Could not parse server response.'); }
+    } else {
+      let msg = 'Analysis failed.';
+      try { msg = JSON.parse(xhr.responseText).error || msg; } catch(_){}
+      showError(msg);
+    }
+  };
+  xhr.ontimeout = () => {
+    clearInterval(fakeTimer);
+    analyseBtn.innerHTML = '<i class="bi bi-cpu me-2"></i>Analyse Video';
+    analyseBtn.disabled  = false;
+    showError('Request timed out. Try a shorter or smaller video file.');
+  };
+  xhr.onerror = () => {
+    clearInterval(fakeTimer);
+    analyseBtn.innerHTML = '<i class="bi bi-cpu me-2"></i>Analyse Video';
+    analyseBtn.disabled  = false;
+    showError('Network error — check connection and try again.');
+  };
+  xhr.send(fd);
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   showResult — renders the full Real vs Fake comparison result
+══════════════════════════════════════════════════════════════════════════════ */
+function showResult(data) {
+  progressWrap.style.display = 'none';
+  resultCard.style.display   = 'block';
+  resultCard.scrollIntoView({ behavior:'smooth', block:'start' });
+
+  const isFake  = data.is_deepfake;
+  const score   = clamp(data.video_score  || 0, 0, 1);
+  const conf    = clamp(data.confidence   || 0, 0, 1);
+  const sigs    = data.signals  || {};
+  const liveness= data.liveness || {};
+
+  /* ── Verdict Banner ── */
+  const banner = document.getElementById('verdictBanner');
+  banner.className = 'rounded-3 p-4 text-white text-center mb-4 ' + (isFake ? 'verdict-fake' : 'verdict-real');
+  document.getElementById('verdictIcon').innerHTML = isFake
+    ? '<i class="bi bi-shield-x"></i>' : '<i class="bi bi-shield-check"></i>';
+  document.getElementById('verdictText').textContent = isFake
+    ? '⚠  DEEPFAKE / AI DETECTED' : '✓  REAL — LIVING PERSON';
+  document.getElementById('verdictSub').textContent  = isFake
+    ? 'This video contains signs of AI generation, face-swap, or digital manipulation.'
+    : 'No deepfake indicators found. This appears to be an authentic video of a real person.';
+
+  /* ── Liveness Badges ── */
+  const badgeEl = document.getElementById('livenessBadges');
+  badgeEl.innerHTML = '';
+  if (Object.keys(liveness).length) {
+    badgeEl.innerHTML += liveness.blink_detected
+      ? '<span class="liveness-badge badge-live"><i class="bi bi-eye"></i> Natural Blink ✓</span>'
+      : '<span class="liveness-badge badge-ai"><i class="bi bi-eye-slash"></i> No Blink Detected</span>';
+    badgeEl.innerHTML += liveness.natural_movement
+      ? '<span class="liveness-badge badge-live"><i class="bi bi-person-arms-up"></i> Natural Landmarks ✓</span>'
+      : '<span class="liveness-badge badge-warn"><i class="bi bi-exclamation-triangle"></i> Landmark Anomaly</span>';
+  }
+
+  /* ── Gauge ── */
+  const pct = Math.round(score * 100);
+  document.getElementById('gaugeCircle').style.strokeDashoffset = 264 - 264 * score;
+  document.getElementById('gaugeText').textContent = pct + '%';
+
+  /* ── Confidence + label ── */
+  document.getElementById('confidenceText').textContent = Math.round(conf * 100) + '%';
+  const lbl = document.getElementById('labelText');
+  const sub = document.getElementById('labelSub');
+  if (isFake) {
+    lbl.textContent = 'DEEPFAKE';
+    lbl.className   = 'fs-4 fw-semibold mb-1 text-danger';
+    sub.textContent = 'AI-generated or face-swapped';
+  } else {
+    lbl.textContent = 'REAL';
+    lbl.className   = 'fs-4 fw-semibold mb-1 text-success';
+    sub.textContent = 'Authentic human video';
+  }
+
+  /* Timestamp */
+  if (data.analyzed_at) {
+    const d = new Date(data.analyzed_at.endsWith('Z') ? data.analyzed_at : data.analyzed_at + 'Z');
+    document.getElementById('analysedAt').textContent = d.toLocaleString();
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     REAL vs FAKE DYNAMIC COMPARISON TABLE — shows your video's actual values
+     alongside what typical real/fake values look like
+  ══════════════════════════════════════════════════════════════════════════ */
+  const diffDefs = [
+    {
+      key:'gan',              icon:'📡',  label:'GAN Frequency Fingerprint',
+      realDesc:'No spectral power spikes (real camera)',   fakeDesc:'Power spikes at N/2, N/4 bins (AI upsampling)',
+      realRange:[0, 0.25],    fakeRange:[0.55, 1.0],
+      realTip:'No AI upsampling artefacts found',          fakeTip:'GAN/diffusion upsampling artefacts detected',
+    },
+    {
+      key:'symmetry',         icon:'🪞',  label:'Facial Symmetry',
+      realDesc:'Natural left-right asymmetry (NCC 0.82–0.92)',  fakeDesc:'Unnaturally perfect symmetry (NCC > 0.94)',
+      realRange:[0, 0.25],    fakeRange:[0.55, 1.0],
+      realTip:'Face has natural human asymmetry',          fakeTip:'Face is too symmetric — AI trained on aligned data',
+    },
+    {
+      key:'eye_blink',        icon:'👁',  label:'Eye Blink / Liveness',
+      realDesc:'Blinks detected (EAR < 0.20)',   fakeDesc:'Eyes locked open / no blink',
+      realRange:[0, 0.20],    fakeRange:[0.55, 1.0],
+      realTip:'Natural eye blinking detected',             fakeTip:'No natural blink pattern found',
+    },
+    {
+      key:'skin',             icon:'🧬',  label:'Skin Texture (LBP)',
+      realDesc:'Pores & micro-detail (high LBP entropy)',   fakeDesc:'Plastic-smooth, uniform skin (low entropy)',
+      realRange:[0, 0.30],    fakeRange:[0.60, 1.0],
+      realTip:'Skin shows natural micro-texture',          fakeTip:'Skin texture is too smooth / AI-generated',
+    },
+    {
+      key:'fft',              icon:'📊',  label:'FFT High-Freq Texture',
+      realDesc:'Rich high-freq detail (LF-ratio 0.40–0.65)',  fakeDesc:'Over-smooth, AI generation (LF-ratio > 0.65)',
+      realRange:[0, 0.35],    fakeRange:[0.60, 1.0],
+      realTip:'High-frequency image detail is present',    fakeTip:'Frequency spectrum shows AI smoothing',
+    },
+    {
+      key:'boundary',         icon:'🔲',  label:'Blending Boundary',
+      realDesc:'Smooth face-to-background transition',     fakeDesc:'Abrupt sharpness change at face edge',
+      realRange:[0, 0.20],    fakeRange:[0.50, 1.0],
+      realTip:'No blending mask boundary detected',        fakeTip:'Sharp discontinuity at face boundary (face-swap)',
+    },
+    {
+      key:'chroma',           icon:'🎨',  label:'Face Chroma Boundary',
+      realDesc:'Matched skin tones throughout',            fakeDesc:'Colour seam at face edge',
+      realRange:[0, 0.25],    fakeRange:[0.55, 1.0],
+      realTip:'No colour mismatch detected',               fakeTip:'Chroma seam at face boundary',
+    },
+  ];
+
+  const diffRows = document.getElementById('diffRows');
+  diffRows.innerHTML = '';
+
+  diffDefs.forEach(d => {
+    const v = (sigs[d.key] !== undefined) ? sigs[d.key] : null;
+    if (v === null) return;
+    const vpct = Math.round(v * 100);
+
+    // Determine status of THIS signal
+    let statusIcon, statusClass, statusText;
+    if (v <= 0.35) {
+      statusIcon = '🟢'; statusClass = 'diff-val-real'; statusText = 'REAL-like';
+    } else if (v <= 0.55) {
+      statusIcon = '🟡'; statusClass = 'text-warning';  statusText = 'Borderline';
+    } else {
+      statusIcon = '🔴'; statusClass = 'diff-val-fake'; statusText = 'FAKE-like';
+    }
+
+    // Is your video score in the real or fake range?
+    const inRealRange = v >= d.realRange[0] && v <= d.realRange[1];
+    const inFakeRange = v >= d.fakeRange[0] && v <= d.fakeRange[1];
+
+    diffRows.innerHTML += `
+      <tr>
+        <td class="diff-td-signal">${d.icon} ${d.label}</td>
+        <td class="diff-td-real">
+          <div style="font-size:.8rem">${d.realDesc}</div>
+          ${inRealRange ? `<div style="color:#34d399;font-size:.75rem;margin-top:.2rem">◀ Your video matches this ✓</div>` : ''}
+        </td>
+        <td class="diff-td-fake">
+          <div style="font-size:.8rem">${d.fakeDesc}</div>
+          ${inFakeRange ? `<div style="color:#f87171;font-size:.75rem;margin-top:.2rem">◀ Your video matches this ⚠</div>` : ''}
+        </td>
+        <td style="text-align:center;background:rgba(0,0,0,.15);padding:.7rem">
+          <div class="${statusClass}" style="font-size:1.1rem">${statusIcon}</div>
+          <div class="${statusClass}" style="font-size:.8rem;font-weight:700">${vpct}%</div>
+          <div style="font-size:.7rem;color:rgba(255,255,255,.45)">${statusText}</div>
+        </td>
+      </tr>`;
+  });
+
+  document.getElementById('diffSection').style.display = 'block';
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     WHY IS THIS REAL / FAKE?  — plain-language summary
+  ══════════════════════════════════════════════════════════════════════════ */
+  const whyBox   = document.getElementById('whyBox');
+  const whyLabel = document.getElementById('whyLabel');
+  document.getElementById('whySection').style.display = 'block';
+  whyLabel.textContent = isFake ? 'DEEPFAKE / AI' : 'REAL';
+  whyLabel.style.color = isFake ? '#f87171' : '#34d399';
+  whyBox.className = 'why-box ' + (isFake ? 'why-box-fake' : 'why-box-real');
+
+  // Collect the top reasons
+  const reasons = [];
+
+  /* Why is this real/fake — reasons engine */
+  const blinkScore = sigs.eye_blink  !== undefined ? sigs.eye_blink  : 0.3;
+  const skinScore  = sigs.skin       !== undefined ? sigs.skin       : 0.3;
+  const lmScore    = sigs.landmark_stability !== undefined ? sigs.landmark_stability : 0.3;
+  const fftScore   = sigs.fft        !== undefined ? sigs.fft        : 0.3;
+  const ganScore   = sigs.gan        !== undefined ? sigs.gan        : 0.0;
+  const symScore   = sigs.symmetry   !== undefined ? sigs.symmetry   : 0.0;
+  const bndScore   = sigs.boundary   !== undefined ? sigs.boundary   : 0.0;
+
+  if (!isFake) {
+    if (blinkScore < 0.20)
+      reasons.push({ icon:'👁', text:`<strong>Natural eye blinking was detected</strong> — a definitive sign of a real living person. AI-generated faces almost never blink naturally.` });
+    if (ganScore < 0.25)
+      reasons.push({ icon:'📡', text:`<strong>No GAN frequency fingerprint detected</strong> — real cameras do not produce the spectral power spikes that GAN/diffusion AI generators leave in every frame.` });
+    if (symScore < 0.25)
+      reasons.push({ icon:'🪞', text:`<strong>Natural facial asymmetry present</strong> — real human faces have subtle left-right differences. AI-generated faces are trained on aligned data and are unnaturally symmetric.` });
+    if (skinScore < 0.30)
+      reasons.push({ icon:'🧬', text:`<strong>Skin texture is rich and natural</strong> — pores and micro-details are present, which AI generators cannot fully replicate.` });
+    if (reasons.length === 0)
+      reasons.push({ icon:'✅', text:`All 11 signals fall below the deepfake threshold (0.48). No AI generation artefacts were detected.` });
+  } else {
+    if (ganScore > 0.55)
+      reasons.push({ icon:'📡', text:`<strong>GAN frequency fingerprint detected</strong> — power spikes at N/2 and N/4 frequency bins are present. Every GAN and diffusion model leaves this artefact. Real cameras never do.` });
+    if (symScore > 0.55)
+      reasons.push({ icon:'🪞', text:`<strong>Face is unnaturally symmetric</strong> — AI models trained on aligned face datasets produce faces with near-perfect left-right symmetry. Real humans don't.` });
+    if (blinkScore > 0.55)
+      reasons.push({ icon:'👁', text:`<strong>No natural eye blinking detected</strong> — eye landmarks remained static across all frames. AI-generated video faces typically don't blink naturally.` });
+    if (bndScore > 0.50)
+      reasons.push({ icon:'🔲', text:`<strong>Abrupt sharpness boundary at face edge</strong> — a hard transition between the face and background indicates a face-swap blending mask artefact.` });
+    if (skinScore > 0.60)
+      reasons.push({ icon:'🧬', text:`<strong>Skin texture is unnaturally smooth</strong> — the face looks like a plastic render with no pores or micro-imperfections, a hallmark of AI generation.` });
+    if (reasons.length === 0)
+      reasons.push({ icon:'⚠', text:`The combined score of all 11 signals exceeds the deepfake threshold (0.48). Multiple signals together indicate AI manipulation.` });
+  }
+
+  whyBox.innerHTML = `
+    <div style="font-weight:600;font-size:.9rem;color:${isFake?'#f87171':'#34d399'}">
+      ${isFake ? '⚠ Top reasons this video was flagged as FAKE:' : '✅ Top reasons this video was verified as REAL:'}
+    </div>
+    ${reasons.slice(0,4).map(r=>`
+      <div class="why-item">
+        <span class="why-icon">${r.icon}</span>
+        <span class="why-text">${r.text}</span>
+      </div>`).join('')}`;
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     8-SIGNAL BAR CHART
+  ══════════════════════════════════════════════════════════════════════════ */
+  /* 11-Signal bar chart */
+  const sigDefs = [
+    { key:'gan',               label:'📡 GAN Frequency Fingerprint',     weight:35 },
+    { key:'symmetry',          label:'🪞 Facial Symmetry',               weight:18 },
+    { key:'fft',               label:'📊 FFT High-Freq Texture',         weight:16 },
+    { key:'skin',              label:'🧬 Skin Texture (LBP)',            weight:14 },
+    { key:'boundary',          label:'🔲 Blending Boundary',             weight:9  },
+    { key:'eye_blink',         label:'👁 Eye Blink / Liveness',          weight:20 },
+    { key:'landmark_stability',label:'📍 Landmark Stability',            weight:9  },
+    { key:'chroma',            label:'🎨 Face Chroma Boundary',          weight:5  },
+    { key:'temporal_flicker',  label:'🎞 Temporal Flicker',              weight:3  },
+    { key:'gradient',          label:'📐 Gradient Contrast',             weight:3  },
+  ];
+
+  const rowEl = document.getElementById('signalRows');
+  rowEl.innerHTML = '';
+  sigDefs.forEach(s => {
+    const v = sigs[s.key];
+    if (v === undefined) return;
+    const vp  = Math.round(v * 100);
+    const col = v >= 0.60 ? '#ef4444' : v >= 0.40 ? '#f59e0b' : '#10b981';
+    rowEl.innerHTML += `
+      <div class="signal-row">
+        <div class="signal-label">
+          <span>${s.label} <span style="opacity:.35;font-size:.7rem">(${s.weight}%)</span></span>
+          <span style="color:${col};font-weight:700">${vp}% ${v>=0.60?'⚠':v>=0.40?'~':'✓'}</span>
+        </div>
+        <div class="signal-bg">
+          <div class="signal-fill" style="width:${vp}%;background:${col}"></div>
+        </div>
+      </div>`;
+  });
+  document.getElementById('signalSection').style.display = 'block';
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     FRAME SPARKLINE
+  ══════════════════════════════════════════════════════════════════════════ */
+  const sparkEl = document.getElementById('frameSparkline');
+  sparkEl.innerHTML = '';
+  if (data.frame_scores && data.frame_scores.length) {
+    const total = data.frame_scores.length;
+    const fakeCount = data.frame_scores.filter(s => s >= 0.52).length;
+    const realCount = total - fakeCount;
+    document.getElementById('sparklineStats').textContent =
+      `${total} frames · 🟢 ${realCount} real · 🔴 ${fakeCount} flagged`;
+
+    data.frame_scores.forEach((s, i) => {
+      const h   = Math.max(6, Math.round(s * 54));
+      const col = s >= 0.52 ? '#ef4444' : s >= 0.38 ? '#f59e0b' : '#10b981';
+      const bar = document.createElement('div');
+      bar.title = `Frame ${i+1}: ${(s*100).toFixed(1)}% — ${s>=0.52?'FAKE':'REAL'}`;
+      bar.style.cssText = `width:9px;height:${h}px;background:${col};border-radius:2px;opacity:.85;flex-shrink:0`;
+      sparkEl.appendChild(bar);
+    });
+    document.getElementById('sparklineSection').style.display = 'block';
+  }
+}
+
+/* ─── Error alert ────────────────────────────────────────────────────────── */
+function showError(msg) {
+  progressWrap.style.display = 'none';
+  document.querySelectorAll('.upload-error-alert').forEach(el => el.remove());
+  const div = document.createElement('div');
+  div.className = 'alert alert-danger mt-3 rounded-3 upload-error-alert';
+  div.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2"></i><strong>Error:</strong> ' + msg;
+  document.querySelector('#analyseBtn').closest('.glass-card').appendChild(div);
+  setTimeout(() => div.remove(), 10000);
+}
+</script>
+{% endblock %}
