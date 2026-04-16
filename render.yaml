@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: deepfake-proctoring
+    runtime: python
+    region: oregon
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --worker-class eventlet -w 1 --bind 0.0.0.0:$PORT --timeout 120
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: FLASK_DEBUG
+        value: "0"
+      - key: PYTHON_VERSION
+        value: "3.11.0"
