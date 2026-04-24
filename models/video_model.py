@@ -135,6 +135,7 @@ def predict_base64_frame(b64_data: str, session_id: str = "default") -> dict:
     from models.heuristic_detector import (
         score_frame_detailed, THRESHOLD as H_THRESH,
         _eye_blink_score, _landmark_stability_score, _temporal_flicker,
+        _optical_flow_score, _rppg_score,
     )
     import cv2
 
@@ -157,6 +158,8 @@ def predict_base64_frame(b64_data: str, session_id: str = "default") -> dict:
     blink_score    = 0.3
     landmark_score = 0.3
     flicker_score  = 0.0
+    flow_score     = 0.3
+    rppg_score     = 0.5
     if len(buf_frames) >= 3:
         try:
             blink_score    = _eye_blink_score(buf_frames)
@@ -171,24 +174,40 @@ def predict_base64_frame(b64_data: str, session_id: str = "default") -> dict:
             flicker_score = _temporal_flicker(grays)
         except Exception:
             pass
+        try:
+            flow_score = _optical_flow_score(buf_frames)
+        except Exception:
+            pass
+    if len(buf_frames) >= 10:
+        try:
+            rppg_score = _rppg_score(buf_frames)
+        except Exception:
+            pass
 
     # ── Incorporate temporal into score ──────────────────────────────────────
     from models.heuristic_detector import _WT
-    frame_w = 1.0 - (_WT["eye_blink"] + _WT["landmark"] + _WT["flicker"])
+    frame_w = 1.0 - (_WT["rppg"] + _WT["eye_blink"] + _WT["opt_flow"] + _WT["landmark"] + _WT["flicker"])
     temporal_adj = (
-        _WT["eye_blink"] * blink_score +
+        _WT["rppg"]      * rppg_score     +
+        _WT["eye_blink"] * blink_score    +
+        _WT["opt_flow"]  * flow_score     +
         _WT["landmark"]  * landmark_score +
         _WT["flicker"]   * flicker_score
     )
     h_score_full = float(np.clip(frame_w * h_score + temporal_adj, 0.0, 1.0))
 
-    # ── DUAL OVERRIDE RULES (v6) ─────────────────────────────────────────────
-    # RULE 1 — Strong GAN fingerprint → floor raised to 0.55 (AI signal wins)
-    if gan_score > 0.72:
+    # ── OVERRIDE RULES (v8) — require TWO strong signals for fake-lock ─────────
+    strong_fake = 0
+    if gan_score   > 0.72: strong_fake += 1
+    if flow_score  > 0.65: strong_fake += 1
+    if rppg_score  > 0.78 and len(buf_frames) >= 10: strong_fake += 1
+    if h_score     > 0.60: strong_fake += 1
+    if strong_fake >= 2:
         h_score_full = max(h_score_full, 0.55)
-    # RULE 2 — Clear blink + low GAN → definitely real, cap at 0.45
-    elif blink_score < 0.10 and gan_score < 0.35:
-        h_score_full = min(h_score_full, 0.45)
+    # REAL-LOCK: clear blink + low GAN + heartbeat → cap at 0.40
+    elif (blink_score < 0.10 and gan_score < 0.30 and
+          (len(buf_frames) < 10 or rppg_score < 0.25)):
+        h_score_full = min(h_score_full, 0.40)
 
     # ── CNN path (only if a trained model is saved) ───────────────────────────
     final_score = h_score_full
@@ -207,12 +226,18 @@ def predict_base64_frame(b64_data: str, session_id: str = "default") -> dict:
     signals["eye_blink"]          = round(blink_score,    4)
     signals["landmark_stability"] = round(landmark_score, 4)
     signals["temporal_flicker"]   = round(flicker_score,  4)
+    signals["optical_flow"]       = round(flow_score,     4)
+    signals["rppg"]               = round(rppg_score,     4)
 
     liveness = {
         "blink_detected"  : blink_score < 0.15,
-        "eye_blink_score" : round(blink_score, 4),
+        "eye_blink_score" : round(blink_score,  4),
         "natural_movement": landmark_score < 0.40,
-        "gan_fingerprint" : round(gan_score, 4),
+        "rppg_score"      : round(rppg_score,   4),
+        "heartbeat_present": rppg_score < 0.35,
+        "optical_flow"    : round(flow_score,   4),
+        "flow_coherent"   : flow_score < 0.40,
+        "gan_fingerprint" : round(gan_score,    4),
         "gan_detected"    : gan_score > 0.55,
     }
 
