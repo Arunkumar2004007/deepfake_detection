@@ -4,6 +4,7 @@ services:
     runtime: python
     region: oregon
     plan: starter
+    pythonVersion: "3.11.0"
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app --worker-class eventlet -w 1 --bind 0.0.0.0:$PORT --timeout 120
     envVars:
@@ -11,22 +12,20 @@ services:
         value: production
       - key: FLASK_DEBUG
         value: "0"
-      - key: PYTHON_VERSION
-        value: "3.11.0"
       - key: SECRET_KEY
         generateValue: true
-      # Set these in the Render dashboard → Environment
-      # - key: SUPABASE_URL
-      # - key: SUPABASE_ANON_KEY
-      # - key: SUPABASE_SERVICE_ROLE_KEY
-      # - key: GOOGLE_CLIENT_ID
-      # - key: GOOGLE_CLIENT_SECRET
-      # - key: GOOGLE_REDIRECT_URI         # e.g. https://deepfake-proctoring.onrender.com/auth/callback
-      # - key: ADMIN_EMAIL
-      # - key: ADMIN_PASSWORD
-      # - key: MAIL_SERVER
-      # - key: MAIL_PORT
-      # - key: MAIL_USE_TLS
-      # - key: MAIL_USERNAME
-      # - key: MAIL_PASSWORD
-      # - key: MAIL_FROM
+      # Set these in the Render dashboard → Environment tab:
+      # SUPABASE_URL
+      # SUPABASE_ANON_KEY
+      # SUPABASE_SERVICE_ROLE_KEY
+      # GOOGLE_CLIENT_ID
+      # GOOGLE_CLIENT_SECRET
+      # GOOGLE_REDIRECT_URI  →  https://deepfake-proctoring.onrender.com/auth/callback
+      # ADMIN_EMAIL
+      # ADMIN_PASSWORD
+      # MAIL_SERVER
+      # MAIL_PORT
+      # MAIL_USE_TLS
+      # MAIL_USERNAME
+      # MAIL_PASSWORD
+      # MAIL_FROM
