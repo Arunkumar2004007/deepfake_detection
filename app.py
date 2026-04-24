@@ -26,9 +26,11 @@ app = Flask(__name__)
 app.config.from_object(Config)
 app.permanent_session_lifetime = datetime.timedelta(hours=12)
 # Ensure url_for(_external=True) generates correct scheme for Google callback
-app.config["PREFERRED_URL_SCHEME"] = "https" if (
-    os.path.exists(Config.SSL_CERT) and os.path.exists(Config.SSL_KEY)
-) else "http"
+# On Render/production the reverse proxy handles TLS; force https
+app.config["PREFERRED_URL_SCHEME"] = (
+    "https" if os.getenv("FLASK_ENV", "production") == "production"
+    else ("https" if (os.path.exists(Config.SSL_CERT) and os.path.exists(Config.SSL_KEY)) else "http")
+)
 
 CORS(app, origins="*", supports_credentials=True)
 
